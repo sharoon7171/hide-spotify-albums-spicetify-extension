@@ -46,7 +46,12 @@ export function albumPageRoot(): HTMLElement | null {
 export function resolveAlbumActionAnchor(): AlbumActionAnchor | null {
   const root = albumPageRoot();
   if (!root) return null;
+  return resolveActionAnchorInScope(root);
+}
 
+export function resolveActionAnchorInScope(
+  root: HTMLElement,
+): AlbumActionAnchor | null {
   const byRow = anchorFromActionBarRow(root);
   if (byRow) return byRow;
 
