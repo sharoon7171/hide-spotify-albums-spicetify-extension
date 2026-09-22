@@ -138,21 +138,19 @@ Or step by step:
 
 | Layer | What it holds |
 | --- | --- |
-| Firebase Auth (IndexedDB) | Signed-in user (`uid`); restored before Firestore reads |
+| Firebase Auth (IndexedDB) | Local session restore via `authStateReady` — needed only to know `uid` (not a network re-login) |
 | Firestore `users/{uid}/savedAlbums/{albumId}` | Server copy of each hidden album (`updatedAt`, optional `title` / `url`) |
-| Firestore persistent cache | Local Firestore copy for that `uid`; hydrated with `getDocsFromCache` after Auth settles |
-| `onSnapshot` | Live sync with the server after the cache hydrate |
-| `localStorage` `hide-albums-ids-v1` | Hidden album ID list for **instant** hide on the next Spotify launch (device-local) |
-| `localStorage` `hide-albums-hide-tiles` | **Hide in Grids** on/off (device-local, not synced) |
+| Firestore persistent cache (`CACHE_SIZE_UNLIMITED`) | Official offline IndexedDB cache ([Enable offline](https://firebase.google.com/docs/firestore/manage-data/enable-offline)); albums are read with `getDocsFromCache` **before** the manager UI paints signed-in state |
+| `localStorage` | **Hide in Grids** only (device-local, not synced) |
 
-Bootstrap and post-snapshot scripts read the local ID list **synchronously** before Spotify’s UI finishes loading, so grids can hide without waiting on Firebase. Auth + Firestore persistent cache + `onSnapshot` keep that list and the manager panel in sync with Chrome. Sign-out clears the local ID mirror.
+Album docs live under `users/{uid}/…`, so Auth must settle locally first to get `uid`, then the persistent cache supplies the list offline. The manager waits on that hydrate, then shows account + table together — it does not wait on a server round-trip when the cache is already seeded.
 
 ## Project Layout
 
 | Path | Role |
 | --- | --- |
 | `src/index.ts` | Extension entry after Spicetify is ready |
-| `src/albums` | Store, album IDs, early hidden-ID mirror |
+| `src/albums` | Store, album IDs, in-memory early IDs for bootstrap hooks |
 | `src/lib/firebase` | App, Auth, Firestore album CRUD and listeners |
 | `src/features` | Manager panel, album / discography hide toggles, DOM apply |
 | `src/hiding` | Route-aware grid and search hiding |
