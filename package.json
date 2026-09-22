@@ -1,7 +1,5 @@
 {
-  "name": "spicetify-extension",
-  "private": true,
-  "version": "1.0.0",
+  "name": "hide-spotify-albums-spicetify-extension",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build && vite build --config vite.bootstrap.config.ts && vite build --config vite.bootstrap-post.config.ts",
@@ -9,9 +7,17 @@
     "apply": "npm run build && bash scripts/install.sh"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
-    "terser": "^5.46.2",
-    "typescript": "~6.0.2",
-    "vite": "^8.0.8"
+    "@types/node": "^26.6.2",
+    "terser": "^5.51.2",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "firebase": "^12.19.0"
+  },
+  "allowScripts": {
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true,
+    "fsevents@2.3.3": true
   }
 }
