@@ -5,6 +5,8 @@ import type { WebpackRequire } from "@/webpack/require";
 
 export const VIRTUAL_LIST_NEEDLE = "itemIsValidPredicate:u=()=>!0";
 
+const scannedFactories = new WeakSet<object>();
+
 type VirtualListHook = (props: {
   itemIsValidPredicate?: (value: unknown) => boolean;
   initialItems?: unknown;
@@ -32,10 +34,14 @@ function isVirtualListFactory(
 ): factory is WebpackFactory {
   if (typeof factory !== "function") return false;
   const tagged = factory as TaggedFactory;
-  return (
-    tagged.__spicetifyExtVirtualList === true ||
-    factory.toString().includes(needle)
-  );
+  if (tagged.__spicetifyExtVirtualList === true) return true;
+  if (scannedFactories.has(factory)) return false;
+  scannedFactories.add(factory);
+  const match = factory.toString().includes(needle);
+  if (match) {
+    Object.defineProperty(factory, "__spicetifyExtVirtualList", { value: true });
+  }
+  return match;
 }
 
 function shouldFilterAlbumsAtPath(path: string): boolean {
