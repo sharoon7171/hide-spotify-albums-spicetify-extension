@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
+    alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   build: {
     outDir: "dist",
@@ -12,8 +12,8 @@ export default defineConfig({
     lib: {
       entry: "src/webpack/bootstrap.ts",
       formats: ["iife"],
-      name: "SpotifyCustomizationBootstrap",
-      fileName: () => "hidden-albums-bootstrap.js",
+      name: "HideAlbumsBootstrap",
+      fileName: () => "hide-albums-bootstrap.js",
     },
     rollupOptions: {
       output: {

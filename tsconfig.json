@@ -14,5 +14,5 @@
     },
     "types": ["./types/spicetify"]
   },
-  "include": ["src", "types"]
+  "include": ["src", "types", "src/vite-env.d.ts"]
 }
