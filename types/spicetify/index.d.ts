@@ -60,4 +60,20 @@ declare namespace Spicetify {
   const SVGIcons: Record<string, string>;
 
   const Player: unknown;
+
+  const React: {
+    createElement: (
+      type: unknown,
+      props: Record<string, unknown> | null,
+      ...children: unknown[]
+    ) => unknown;
+    useRef: <T>(value: T) => { current: T };
+    useSyncExternalStore: <T>(
+      subscribe: (onChange: () => void) => () => void,
+      getSnapshot: () => T,
+      getServerSnapshot?: () => T,
+    ) => T;
+    jsx?: (type: unknown, props: unknown, key?: unknown) => unknown;
+    jsxs?: (type: unknown, props: unknown, key?: unknown) => unknown;
+  };
 }
