@@ -74,9 +74,9 @@ Marketplace is optional. This extension is applied from source with `npm run app
 1. Apply the extension with Spicetify and open the Spotify desktop app
 2. Open **Hide Albums in Spicetify** from the global nav (next to Home / Search)
 3. Sign in with an email and password you created in Firebase Authentication
-4. Open any album and choose **Hide** in the action bar
-5. With **Hide in Grids** on, that album leaves Home, Artist, Artist Discography, Search, and carousels
-6. Unhide from the album page, or remove the row from the manager panel
+4. Choose **Hide** on an album page action bar, or on **Artist Discography** in list mode (one control per release, next to More)
+5. With **Hide in Grids** on, that album leaves Home, Artist, Artist Discography (grid and list), Search, and carousels
+6. Unhide from the album page, the discography list control, or the manager panel
 
 ### Manager Panel
 
@@ -150,12 +150,13 @@ Album docs live under `users/{uid}/…`, so Auth must settle locally first to ge
 | Path | Role |
 | --- | --- |
 | `src/index.ts` | Extension entry after Spicetify is ready |
+| `src/core` | Shared page sync (history + DOM) for album and discography UI |
 | `src/albums` | Store, album IDs, live hidden-ID set on `globalThis` (shared by bootstrap + main) |
 | `src/lib/firebase` | App, Auth, Firestore album CRUD and listeners |
-| `src/features` | Manager panel, album / discography hide toggles, DOM apply |
-| `src/hiding` | Route-aware DOM hiding; discography uses the virtual-list patch instead |
+| `src/features` | Manager panel, album / discography list hide toggles, DOM apply |
+| `src/hiding` | Route-aware DOM hiding; discography list/grid use the virtual-list patch instead |
 | `src/ui` | Nav mount, album anchors, hide button host |
-| `src/webpack` | Early bootstrap / post-snapshot ODP hooks and discography virtual-list patch |
+| `src/webpack` | Early bootstrap / post-snapshot ODP hooks; discography virtual-list + list action-bar jsx patches. Webpack require comes from Spotify’s chunk global (`rspackChunk`, then legacy `webpackChunkclient_web` fallbacks)—same order as Spicetify’s wrapper |
 | `scripts/install.sh` | Copy builds into Spicetify and apply |
 
 Outputs: `hide-albums.js`, `hide-albums-bootstrap.js`, `hide-albums-post-snapshot.js`.
