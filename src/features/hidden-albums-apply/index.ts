@@ -44,6 +44,24 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
     applyVirtualListAlbumPatch(req, patchCtx);
   };
 
+  const bumpDiscographyRender = () => {
+    if (!usesDiscographyVirtualList()) return;
+    const history = sp.Platform?.History;
+    const loc = history?.location;
+    if (!history?.replace || !loc) return;
+    const prev = loc.state;
+    const state =
+      prev && typeof prev === "object"
+        ? { ...prev, __haVl: Date.now() }
+        : { __haVl: Date.now() };
+    history.replace({
+      pathname: loc.pathname,
+      search: loc.search ?? "",
+      hash: loc.hash ?? "",
+      state,
+    });
+  };
+
   const applySearchHide = () => {
     restoreSearchDomHiding();
     if (!isSearchActive()) {
@@ -76,6 +94,7 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
     if (next === prevSig) return;
     prevSig = next;
     sync();
+    bumpDiscographyRender();
   });
 
   const offNav = sp.Platform.History.listen(sync);
