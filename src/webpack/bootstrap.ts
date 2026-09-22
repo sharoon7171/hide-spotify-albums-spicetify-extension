@@ -17,6 +17,7 @@ import {
       __spicetifyExtOdpHook?: boolean;
     };
     if (tagged.__spicetifyExtOdpHook) return;
+    const checked = new WeakSet<object>();
     const orig = Object.defineProperty;
     Object.defineProperty = function <T>(
       obj: T,
@@ -37,11 +38,12 @@ import {
       nextDesc.get = () => {
         const val = origGet();
         if (virtualListPatch.isVirtualListExportHook(val)) return val;
-        if (
-          typeof val === "function" &&
-          val.toString().includes(VIRTUAL_LIST_NEEDLE)
-        ) {
-          return virtualListPatch.wrapHook(val);
+        if (typeof val === "function") {
+          if (checked.has(val)) return val;
+          if (val.toString().includes(VIRTUAL_LIST_NEEDLE)) {
+            return virtualListPatch.wrapHook(val);
+          }
+          checked.add(val);
         }
         return val;
       };
