@@ -40,12 +40,8 @@ function installShared(sp: typeof Spicetify): () => void {
   const unpatchPush = patchHistory("pushState", run);
   const unpatchReplace = patchHistory("replaceState", run);
 
-  const main = document.querySelector("main");
-  let mo: MutationObserver | undefined;
-  if (main) {
-    mo = new MutationObserver(() => debounced());
-    mo.observe(main, { childList: true, subtree: true });
-  }
+  const mo = new MutationObserver(() => debounced());
+  mo.observe(document.body, { childList: true, subtree: true });
 
   const titleEl = document.querySelector("title");
   let moTitle: MutationObserver | undefined;
@@ -69,7 +65,7 @@ function installShared(sp: typeof Spicetify): () => void {
     window.removeEventListener("popstate", onPop);
     unpatchPush();
     unpatchReplace();
-    mo?.disconnect();
+    mo.disconnect();
     moTitle?.disconnect();
     if (nav && typeof nav.removeEventListener === "function") {
       nav.removeEventListener("navigate", onNavigate);
