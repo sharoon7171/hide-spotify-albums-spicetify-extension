@@ -55,9 +55,9 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
   };
 
   const applyDom = () => {
-    restoreAllDomHiding();
     if (isSearchActive() || !usesDomHiding()) {
       disarmDomObserver();
+      restoreAllDomHiding();
       return;
     }
     applyHideAlbumDom(scope(), pathname(), hiddenAlbumIdSet());
