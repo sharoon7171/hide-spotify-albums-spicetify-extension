@@ -282,6 +282,7 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   };
 
   let user: FirebaseUserView | null = null;
+  let authSettled = false;
 
   const paintHideTiles = (enabled: boolean) => {
     handles.hideTilesSwitch.setAttribute(
@@ -292,6 +293,13 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   };
 
   const paintAuth = () => {
+    if (!authSettled) {
+      auth.dataset.state = "loading";
+      handles.settingsEl.hidden = true;
+      authBtn.disabled = true;
+      signInBtn.disabled = true;
+      return;
+    }
     handles.settingsEl.hidden = !user;
     if (user) {
       auth.dataset.state = "signed-in";
@@ -406,9 +414,11 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
 
   const offAuth = subscribeAuth((next) => {
     user = next;
+    authSettled = true;
     if (host.isConnected) {
       paintAuth();
       paint(handles, sp);
+      if (user) queueMicrotask(() => searchInput.focus());
     }
   });
 
@@ -418,9 +428,6 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
     offAuth();
   });
 
-  paintAuth();
-  paint(handles, sp);
-  queueMicrotask(() => searchInput.focus());
   return host;
 }
 
