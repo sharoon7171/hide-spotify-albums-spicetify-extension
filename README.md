@@ -1,6 +1,6 @@
 # Hide Albums in Spicetify
 
-Spicetify extension for the Spotify desktop client. It hides albums on Home, Artist, Search, and carousels while album pages stay open. Pair it with [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) by pointing both at the **same Firebase project** and signing in with the **same account**.
+Spicetify extension for the Spotify desktop client. It hides albums on Home, Artist, Artist Discography, Search, and carousels while album pages stay open. Pair it with [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) by pointing both at the **same Firebase project** and signing in with the **same account**.
 
 Build and apply this package locally. There is no hosted backend—you use **your** Firebase project and create Auth users yourself.
 
@@ -75,7 +75,7 @@ Marketplace is optional. This extension is applied from source with `npm run app
 2. Open **Hide Albums in Spicetify** from the global nav (next to Home / Search)
 3. Sign in with an email and password you created in Firebase Authentication
 4. Open any album and choose **Hide** in the action bar
-5. With **Hide in Grids** on, that album leaves Home, Artist, Search, and carousels
+5. With **Hide in Grids** on, that album leaves Home, Artist, Artist Discography, Search, and carousels
 6. Unhide from the album page, or remove the row from the manager panel
 
 ### Manager Panel
@@ -150,12 +150,12 @@ Album docs live under `users/{uid}/…`, so Auth must settle locally first to ge
 | Path | Role |
 | --- | --- |
 | `src/index.ts` | Extension entry after Spicetify is ready |
-| `src/albums` | Store, album IDs, in-memory early IDs for bootstrap hooks |
+| `src/albums` | Store, album IDs, live hidden-ID set on `globalThis` (shared by bootstrap + main) |
 | `src/lib/firebase` | App, Auth, Firestore album CRUD and listeners |
 | `src/features` | Manager panel, album / discography hide toggles, DOM apply |
-| `src/hiding` | Route-aware grid and search hiding |
+| `src/hiding` | Route-aware DOM hiding; discography uses the virtual-list patch instead |
 | `src/ui` | Nav mount, album anchors, hide button host |
-| `src/webpack` | Bootstrap and post-snapshot hooks for virtual lists |
+| `src/webpack` | Early bootstrap / post-snapshot ODP hooks and discography virtual-list patch |
 | `scripts/install.sh` | Copy builds into Spicetify and apply |
 
 Outputs: `hide-albums.js`, `hide-albums-bootstrap.js`, `hide-albums-post-snapshot.js`.
