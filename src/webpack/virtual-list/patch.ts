@@ -3,7 +3,8 @@ import { routePathname } from "@/hiding/routes";
 import { VIRTUAL_LIST_MODULE } from "@/hiding/virtual-list";
 import type { WebpackRequire } from "@/webpack/require";
 
-export const VIRTUAL_LIST_NEEDLE = "itemIsValidPredicate:u=()=>!0";
+export const VIRTUAL_LIST_NEEDLE_PATTERN =
+  /itemIsValidPredicate:\w+=\(\)=>!0/;
 
 const scannedFactories = new WeakSet<object>();
 
@@ -28,16 +29,17 @@ export type VirtualListPatchContext = {
   albumUriRe: RegExp;
 };
 
-function isVirtualListFactory(
-  factory: unknown,
-  needle = VIRTUAL_LIST_NEEDLE,
-): factory is WebpackFactory {
+export function matchesVirtualListNeedle(source: string): boolean {
+  return VIRTUAL_LIST_NEEDLE_PATTERN.test(source);
+}
+
+function isVirtualListFactory(factory: unknown): factory is WebpackFactory {
   if (typeof factory !== "function") return false;
   const tagged = factory as TaggedFactory;
   if (tagged.__spicetifyExtVirtualList === true) return true;
   if (scannedFactories.has(factory)) return false;
   scannedFactories.add(factory);
-  const match = factory.toString().includes(needle);
+  const match = matchesVirtualListNeedle(factory.toString());
   if (match) {
     Object.defineProperty(factory, "__spicetifyExtVirtualList", { value: true });
   }
@@ -59,7 +61,6 @@ export function createVirtualListPatch(ctx: VirtualListPatchContext) {
         return original(props);
       }
       const userPred = props.itemIsValidPredicate ?? (() => true);
-      const hidden = ctx.hiddenIds();
       return original({
         ...props,
         itemIsValidPredicate: (value: unknown) => {
@@ -71,7 +72,7 @@ export function createVirtualListPatch(ctx: VirtualListPatchContext) {
           if (typeof uri !== "string") return true;
           const m = ctx.albumUriRe.exec(uri);
           if (!m) return true;
-          return !hidden.has(m[1]);
+          return !ctx.hiddenIds().has(m[1]);
         },
       });
     };
@@ -135,7 +136,7 @@ export function createVirtualListPatch(ctx: VirtualListPatchContext) {
       const hook = mod.E;
       if (typeof hook !== "function") return false;
       if (isVirtualListExportHook(hook)) return true;
-      if (!hook.toString().includes(VIRTUAL_LIST_NEEDLE)) return false;
+      if (!matchesVirtualListNeedle(hook.toString())) return false;
       assignExportE(mod, wrapHook(hook as VirtualListHook));
       return isVirtualListExportHook(mod.E);
     } catch {
