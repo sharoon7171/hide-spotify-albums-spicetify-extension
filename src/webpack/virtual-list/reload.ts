@@ -7,14 +7,17 @@ import { routePathname } from "@/hiding/routes";
 import { VIRTUAL_LIST_MODULE } from "@/hiding/virtual-list";
 import {
   createVirtualListPatch,
-  VIRTUAL_LIST_NEEDLE,
+  matchesVirtualListNeedle,
   type VirtualListPatchContext,
 } from "@/webpack/virtual-list/patch";
 import { findModuleIdByExportBody } from "@/webpack/require";
 import type { WebpackRequire } from "@/webpack/require";
 
 function resolveVirtualListModuleId(): string {
-  return findModuleIdByExportBody(VIRTUAL_LIST_NEEDLE) ?? VIRTUAL_LIST_MODULE;
+  return (
+    findModuleIdByExportBody((source) => matchesVirtualListNeedle(source)) ??
+    VIRTUAL_LIST_MODULE
+  );
 }
 
 let virtualListExportPatched = false;

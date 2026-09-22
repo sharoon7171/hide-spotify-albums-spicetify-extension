@@ -1,7 +1,7 @@
 import { readHiddenAlbumIdsEarly } from "@/albums/early-ids";
 import {
   createVirtualListPatch,
-  VIRTUAL_LIST_NEEDLE,
+  matchesVirtualListNeedle,
 } from "@/webpack/virtual-list/patch";
 
 (function () {
@@ -40,7 +40,7 @@ import {
         if (virtualListPatch.isVirtualListExportHook(val)) return val;
         if (typeof val === "function") {
           if (checked.has(val)) return val;
-          if (val.toString().includes(VIRTUAL_LIST_NEEDLE)) {
+          if (matchesVirtualListNeedle(val.toString())) {
             return virtualListPatch.wrapHook(val);
           }
           checked.add(val);
