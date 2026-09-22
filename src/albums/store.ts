@@ -3,7 +3,13 @@ import {
   docIdForSavedAlbum,
   type SavedAlbum,
 } from "@/albums/saved-album";
-import { setLiveHiddenAlbumIds } from "@/albums/early-ids";
+import {
+  clearPersistedHiddenAlbumIds,
+  persistHiddenAlbumIds,
+  seedLiveHiddenAlbumIdsFromStorage,
+  setLiveHiddenAlbumIds,
+  readHiddenAlbumIdsEarly,
+} from "@/albums/early-ids";
 import {
   clearAllAlbums,
   loadAlbumsFromCache,
@@ -60,18 +66,24 @@ function writeLocalHideTiles(value: boolean): void {
 }
 
 function rebuildHiddenIdCache(): Set<string> {
-  const out = new Set<string>();
-  if (!uid || !hideTilesEnabled) {
+  if (!hideTilesEnabled) {
+    const out = new Set<string>();
     hiddenIdCache = out;
     setLiveHiddenAlbumIds(out);
     return out;
   }
+  if (!uid) {
+    seedLiveHiddenAlbumIdsFromStorage();
+    hiddenIdCache = new Set(readHiddenAlbumIdsEarly());
+    return hiddenIdCache;
+  }
+  const out = new Set<string>();
   for (const row of Object.values(albums)) {
     const id = albumIdFromSavedAlbum(row);
     if (id) out.add(id);
   }
   hiddenIdCache = out;
-  setLiveHiddenAlbumIds(out);
+  persistHiddenAlbumIds(out);
   return out;
 }
 
@@ -272,20 +284,32 @@ export async function startAlbumSync(): Promise<() => void> {
   if (started) return () => undefined;
   started = true;
   hideTilesEnabled = readLocalHideTiles();
+  seedLiveHiddenAlbumIdsFromStorage();
+  hiddenIdCache = null;
   await firebaseAuthReady();
   unsubAuth = watchAuth((user) => {
     const view = userView(user);
     const nextUid = view?.uid ?? null;
-    const switched = uid !== nextUid;
+    const prevUid = uid;
     uid = nextUid;
     emitAuth(view);
     if (!view) {
       syncEpoch += 1;
       detachAlbumListeners();
-      applyAlbums({});
+      clearPersistedHiddenAlbumIds();
+      albums = {};
+      hiddenIdCache = null;
+      emitAlbums();
       return;
     }
-    if (switched) applyAlbums({});
+    if (prevUid && prevUid !== nextUid) {
+      albums = {};
+      hiddenIdCache = null;
+      clearPersistedHiddenAlbumIds();
+    } else if (prevUid !== nextUid) {
+      albums = {};
+      hiddenIdCache = null;
+    }
     attachAlbumListeners(view.uid);
   });
   return () => {
