@@ -1,7 +1,7 @@
 import { albumIdFromHref } from "@/albums/urls";
 
 export type SavedAlbum = {
-  savedAt: number;
+  updatedAt: number;
   url?: string;
   title?: string;
 };

@@ -1,7 +1,3 @@
-export function openSpotifyAlbumUrl(albumId: string): string {
-  return `https://open.spotify.com/album/${albumId}`;
-}
-
 export function albumIdFromPathname(pathname: string): string | null {
   const m = pathname.match(/\/album\/([^/?#]+)/);
   return m ? m[1] : null;
@@ -25,5 +21,5 @@ export function albumIdFromHref(href: string): string | null {
 }
 
 export function albumUrlFromAlbumId(albumId: string): string {
-  return openSpotifyAlbumUrl(albumId);
+  return `https://open.spotify.com/album/${albumId}`;
 }

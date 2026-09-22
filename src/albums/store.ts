@@ -3,74 +3,122 @@ import {
   docIdForSavedAlbum,
   type SavedAlbum,
 } from "@/albums/saved-album";
+import { setLiveHiddenAlbumIds } from "@/albums/early-ids";
+import {
+  clearAllAlbums,
+  loadAlbumsFromCache,
+  removeAlbum,
+  subscribeAlbums,
+  upsertAlbum,
+} from "@/lib/firebase/firestore-data";
+import {
+  currentUserReady,
+  signInWithEmail,
+  signOutCurrent,
+  userView,
+  watchAuth,
+  type FirebaseUserView,
+} from "@/lib/firebase/auth";
+import { firebaseAuthReady } from "@/lib/firebase/app";
 
-const STORAGE_KEY = "spicetify-ext:hidden-albums-v1";
+type AlbumListener = (albums: Record<string, SavedAlbum>) => void;
+type AuthListener = (user: FirebaseUserView | null) => void;
+type HideTilesListener = (enabled: boolean) => void;
 
-type Listener = (albums: Record<string, SavedAlbum>) => void;
+const HIDE_TILES_KEY = "hide-albums-hide-tiles";
 
-let cache: Record<string, SavedAlbum> | null = null;
+let albums: Record<string, SavedAlbum> = {};
 let hiddenIdCache: Set<string> | null = null;
-const listeners = new Set<Listener>();
+let hideTilesEnabled = readLocalHideTiles();
+let uid: string | null = null;
+let started = false;
+let syncEpoch = 0;
 
-function parseHiddenIds(raw: string | null): Set<string> {
-  const out = new Set<string>();
-  if (!raw) return out;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    for (const row of Object.values(parsed)) {
-      if (!row || typeof row !== "object") continue;
-      const url = (row as { url?: string }).url ?? "";
-      const m = url.match(/\/album\/([^/?#]+)/);
-      if (m) out.add(m[1]);
-    }
-  } catch {
-    return out;
-  }
-  return out;
-}
+const albumListeners = new Set<AlbumListener>();
+const authListeners = new Set<AuthListener>();
+const hideTilesListeners = new Set<HideTilesListener>();
 
-function readRaw(): Record<string, SavedAlbum> {
+let unsubAlbums: (() => void) | null = null;
+let unsubAuth: (() => void) | null = null;
+
+function readLocalHideTiles(): boolean {
   try {
-    const raw = Spicetify.LocalStorage.get(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return {};
-    const out: Record<string, SavedAlbum> = {};
-    for (const [id, value] of Object.entries(parsed)) {
-      if (!value || typeof value !== "object") continue;
-      const row = value as SavedAlbum;
-      if (typeof row.savedAt !== "number") continue;
-      out[id] = row;
-    }
-    return out;
+    const v = localStorage.getItem(HIDE_TILES_KEY);
+    if (v === null) return true;
+    return v !== "0";
   } catch {
-    return {};
+    return true;
   }
 }
 
-function writeRaw(albums: Record<string, SavedAlbum>): void {
-  Spicetify.LocalStorage.set(STORAGE_KEY, JSON.stringify(albums));
+function writeLocalHideTiles(value: boolean): void {
+  try {
+    localStorage.setItem(HIDE_TILES_KEY, value ? "1" : "0");
+  } catch {
+    void 0;
+  }
 }
 
 function rebuildHiddenIdCache(): Set<string> {
   const out = new Set<string>();
-  for (const row of Object.values(snapshot())) {
+  if (!uid || !hideTilesEnabled) {
+    hiddenIdCache = out;
+    setLiveHiddenAlbumIds(out);
+    return out;
+  }
+  for (const row of Object.values(albums)) {
     const id = albumIdFromSavedAlbum(row);
     if (id) out.add(id);
   }
   hiddenIdCache = out;
+  setLiveHiddenAlbumIds(out);
   return out;
 }
 
-function emit(): void {
+function emitAlbums(): void {
   hiddenIdCache = null;
-  const snap = { ...snapshot() };
-  for (const fn of listeners) fn(snap);
+  rebuildHiddenIdCache();
+  const snap = { ...albums };
+  for (const fn of albumListeners) fn(snap);
 }
 
-export function snapshot(): Record<string, SavedAlbum> {
-  if (!cache) cache = readRaw();
-  return cache;
+function emitAuth(user: FirebaseUserView | null): void {
+  for (const fn of authListeners) fn(user);
+}
+
+function emitHideTiles(): void {
+  for (const fn of hideTilesListeners) fn(hideTilesEnabled);
+  emitAlbums();
+}
+
+function applyAlbums(next: Record<string, SavedAlbum>): void {
+  albums = next;
+  emitAlbums();
+}
+
+function detachAlbumListeners(): void {
+  unsubAlbums?.();
+  unsubAlbums = null;
+}
+
+function attachAlbumListeners(userId: string): void {
+  detachAlbumListeners();
+  const epoch = ++syncEpoch;
+  void hydrateFromCache(userId, epoch);
+  unsubAlbums = subscribeAlbums(
+    userId,
+    (next) => {
+      if (epoch !== syncEpoch || uid !== userId) return;
+      applyAlbums(next);
+    },
+    () => undefined,
+  );
+}
+
+async function hydrateFromCache(userId: string, epoch: number): Promise<void> {
+  const cached = await loadAlbumsFromCache(userId);
+  if (epoch !== syncEpoch || uid !== userId || !cached) return;
+  applyAlbums(cached);
 }
 
 export function hiddenAlbumIdSet(): Set<string> {
@@ -78,48 +126,69 @@ export function hiddenAlbumIdSet(): Set<string> {
   return rebuildHiddenIdCache();
 }
 
-export function readHiddenAlbumIdsEarly(): Set<string> {
-  try {
-    const sp = (
-      globalThis as typeof globalThis & {
-        Spicetify?: { LocalStorage?: { get: (k: string) => string | null } };
-      }
-    ).Spicetify;
-    if (sp?.LocalStorage) {
-      const fromSp = parseHiddenIds(sp.LocalStorage.get(STORAGE_KEY));
-      if (fromSp.size > 0) return fromSp;
-    }
-  } catch {}
-  try {
-    return parseHiddenIds(localStorage.getItem(STORAGE_KEY));
-  } catch {
-    return new Set();
-  }
+export function subscribeHiddenAlbums(fn: AlbumListener): () => void {
+  albumListeners.add(fn);
+  fn({ ...albums });
+  return () => albumListeners.delete(fn);
 }
 
-export function subscribeHiddenAlbums(fn: Listener): () => void {
-  listeners.add(fn);
-  fn(snapshot());
-  return () => listeners.delete(fn);
+export function subscribeAuth(fn: AuthListener): () => void {
+  authListeners.add(fn);
+  void currentUserReady().then((u) => fn(userView(u)));
+  return () => authListeners.delete(fn);
+}
+
+export function subscribeHideTilesSetting(fn: HideTilesListener): () => void {
+  hideTilesListeners.add(fn);
+  fn(hideTilesEnabled);
+  return () => hideTilesListeners.delete(fn);
+}
+
+export function getHideTilesEnabled(): boolean {
+  return hideTilesEnabled;
 }
 
 export function isAlbumHidden(albumId: string): boolean {
-  return hiddenAlbumIdSet().has(albumId);
+  return findDocIdForAlbumId(albumId) !== null;
 }
 
-export function findDocIdForAlbumId(albumId: string): string | null {
-  for (const [docId, a] of Object.entries(snapshot())) {
+function findDocIdForAlbumId(albumId: string): string | null {
+  for (const [docId, a] of Object.entries(albums)) {
     if (albumIdFromSavedAlbum(a) === albumId) return docId;
   }
   return null;
 }
 
+function requireUid(): string {
+  if (!uid) {
+    throw Object.assign(new Error("Sign in to sync"), {
+      code: "auth-required",
+    });
+  }
+  return uid;
+}
+
 export async function hideAlbum(entry: SavedAlbum): Promise<void> {
-  const albums = { ...snapshot() };
-  albums[docIdForSavedAlbum(entry)] = entry;
-  cache = albums;
-  writeRaw(albums);
-  emit();
+  const userId = requireUid();
+  const id = docIdForSavedAlbum(entry);
+  const now = Date.now();
+  const row: SavedAlbum = {
+    ...entry,
+    updatedAt: now,
+  };
+  const prev = albums[id];
+  applyAlbums({ ...albums, [id]: row });
+  try {
+    await upsertAlbum(userId, row);
+  } catch (e) {
+    if (prev) applyAlbums({ ...albums, [id]: prev });
+    else {
+      const next = { ...albums };
+      delete next[id];
+      applyAlbums(next);
+    }
+    throw e;
+  }
 }
 
 export async function unhideAlbum(albumId: string): Promise<void> {
@@ -129,21 +198,51 @@ export async function unhideAlbum(albumId: string): Promise<void> {
 }
 
 export async function removeByDocId(docId: string): Promise<void> {
-  const albums = { ...snapshot() };
-  if (!(docId in albums)) return;
-  delete albums[docId];
-  cache = albums;
-  writeRaw(albums);
-  emit();
+  const userId = requireUid();
+  const prev = albums[docId];
+  if (!prev) return;
+  const next = { ...albums };
+  delete next[docId];
+  applyAlbums(next);
+  try {
+    await removeAlbum(userId, docId);
+  } catch (e) {
+    applyAlbums({ ...albums, [docId]: prev });
+    throw e;
+  }
 }
 
 export async function clearAllHiddenAlbums(): Promise<number> {
-  const count = Object.keys(snapshot()).length;
+  const userId = requireUid();
+  const prevAlbums = albums;
+  const ids = Object.keys(prevAlbums);
+  const count = ids.length;
   if (count === 0) return 0;
-  cache = {};
-  writeRaw({});
-  emit();
+  applyAlbums({});
+  try {
+    await clearAllAlbums(userId, ids);
+  } catch (e) {
+    applyAlbums(prevAlbums);
+    throw e;
+  }
   return count;
+}
+
+export async function setHideAlbumTiles(value: boolean): Promise<void> {
+  hideTilesEnabled = value;
+  writeLocalHideTiles(value);
+  emitHideTiles();
+}
+
+export async function signIn(
+  email: string,
+  password: string,
+): Promise<FirebaseUserView | null> {
+  return signInWithEmail(email, password);
+}
+
+export async function signOut(): Promise<void> {
+  await signOutCurrent();
 }
 
 export type HiddenAlbumEntry = {
@@ -151,20 +250,49 @@ export type HiddenAlbumEntry = {
   albumId: string | null;
   title: string;
   url: string | null;
-  savedAt: number;
+  updatedAt: number;
 };
 
 export function listHiddenAlbumEntries(): HiddenAlbumEntry[] {
   const rows: HiddenAlbumEntry[] = [];
-  for (const [docId, album] of Object.entries(snapshot())) {
+  for (const [docId, album] of Object.entries(albums)) {
     rows.push({
       docId,
       albumId: albumIdFromSavedAlbum(album),
       title: (album.title ?? "").trim() || "Untitled album",
       url: album.url ?? null,
-      savedAt: album.savedAt,
+      updatedAt: album.updatedAt,
     });
   }
-  rows.sort((a, b) => b.savedAt - a.savedAt);
+  rows.sort((a, b) => b.updatedAt - a.updatedAt);
   return rows;
+}
+
+export async function startAlbumSync(): Promise<() => void> {
+  if (started) return () => undefined;
+  started = true;
+  hideTilesEnabled = readLocalHideTiles();
+  await firebaseAuthReady();
+  unsubAuth = watchAuth((user) => {
+    const view = userView(user);
+    const nextUid = view?.uid ?? null;
+    const switched = uid !== nextUid;
+    uid = nextUid;
+    emitAuth(view);
+    if (!view) {
+      syncEpoch += 1;
+      detachAlbumListeners();
+      applyAlbums({});
+      return;
+    }
+    if (switched) applyAlbums({});
+    attachAlbumListeners(view.uid);
+  });
+  return () => {
+    syncEpoch += 1;
+    unsubAuth?.();
+    unsubAuth = null;
+    detachAlbumListeners();
+    started = false;
+  };
 }
