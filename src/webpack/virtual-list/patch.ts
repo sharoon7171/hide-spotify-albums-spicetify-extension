@@ -5,7 +5,7 @@ import type { WebpackRequire } from "@/webpack/require";
 
 export const VIRTUAL_LIST_NEEDLE = "itemIsValidPredicate:u=()=>!0";
 
-export type VirtualListHook = (props: {
+type VirtualListHook = (props: {
   itemIsValidPredicate?: (value: unknown) => boolean;
   initialItems?: unknown;
 }) => unknown;
@@ -26,7 +26,7 @@ export type VirtualListPatchContext = {
   albumUriRe: RegExp;
 };
 
-export function isVirtualListFactory(
+function isVirtualListFactory(
   factory: unknown,
   needle = VIRTUAL_LIST_NEEDLE,
 ): factory is WebpackFactory {

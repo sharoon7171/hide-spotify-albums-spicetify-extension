@@ -1,10 +1,9 @@
-export const XpuiTestId = {
+const XpuiTestId = {
   albumPage: "album-page",
   actionBarRow: "action-bar-row",
   playButton: "play-button",
   pauseButton: "pause-button",
   moreButton: "more-button",
-  playlistTracklist: "playlist-tracklist",
 } as const;
 
 export const XpuiAria = {
@@ -20,10 +19,9 @@ const ROW_DISPLAY = new Set([
 ]);
 const HEADER_ROW_MAX_DY_PX = 96;
 
-export type AlbumActionAnchor = {
+type AlbumActionAnchor = {
   bar: HTMLElement;
   insertAfter: HTMLElement;
-  strategy: "action-bar-row" | "play-row" | "main-fallback";
 };
 
 export function currentPathname(sp: typeof Spicetify): string {
@@ -34,7 +32,7 @@ export function isAlbumPath(pathname: string): boolean {
   return /\/album\/[^/?#]+/.test(pathname);
 }
 
-export function albumPageRoot(): HTMLElement | null {
+function albumPageRoot(): HTMLElement | null {
   const scoped = document.querySelector<HTMLElement>(
     `section[data-testid="${XpuiTestId.albumPage}"]`,
   );
@@ -49,7 +47,7 @@ export function resolveAlbumActionAnchor(): AlbumActionAnchor | null {
   return resolveActionAnchorInScope(root);
 }
 
-export function resolveActionAnchorInScope(
+function resolveActionAnchorInScope(
   root: HTMLElement,
 ): AlbumActionAnchor | null {
   const byRow = anchorFromActionBarRow(root);
@@ -68,7 +66,7 @@ function anchorFromActionBarRow(root: HTMLElement): AlbumActionAnchor | null {
   if (!bar) return null;
   const more = pickHeaderMoreButton(bar, findPlayControl(root));
   if (!more) return null;
-  return { bar, insertAfter: more, strategy: "action-bar-row" };
+  return { bar, insertAfter: more };
 }
 
 function anchorFromPlayControl(root: HTMLElement): AlbumActionAnchor | null {
@@ -78,7 +76,7 @@ function anchorFromPlayControl(root: HTMLElement): AlbumActionAnchor | null {
   if (!row) return null;
   const more = pickHeaderMoreButton(row, play);
   if (!more) return null;
-  return { bar: row, insertAfter: more, strategy: "play-row" };
+  return { bar: row, insertAfter: more };
 }
 
 function anchorFromMainFallback(root: HTMLElement): AlbumActionAnchor | null {
@@ -89,7 +87,7 @@ function anchorFromMainFallback(root: HTMLElement): AlbumActionAnchor | null {
     (play && findActionRowFromPlay(play)) ||
     (more.parentElement as HTMLElement | null) ||
     root;
-  return { bar, insertAfter: more, strategy: "main-fallback" };
+  return { bar, insertAfter: more };
 }
 
 function findPlayControl(root: ParentNode): HTMLElement | null {

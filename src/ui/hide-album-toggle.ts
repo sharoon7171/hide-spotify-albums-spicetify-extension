@@ -15,7 +15,7 @@ export type HideAlbumToggleHost = HTMLDivElement & {
   __extAlbumId?: string;
 };
 
-export type HideAlbumToggleOptions = {
+type HideAlbumToggleOptions = {
   sp: typeof Spicetify;
   readTitle: (albumId: string) => string;
   onDidHide?: (albumId: string) => void;
@@ -59,22 +59,38 @@ export function createHideAlbumToggleHost(
     btn.disabled = true;
     try {
       if (isAlbumHidden(albumId)) {
-        await unhideAlbum(albumId);
+        const done = unhideAlbum(albumId);
+        delete host.dataset.extToggleSig;
+        paintHideAlbumToggle(host, albumId);
+        await done;
         opts.sp.showNotification("Album unhidden");
       } else {
+        const now = Date.now();
         const entry: SavedAlbum = {
-          savedAt: Date.now(),
+          updatedAt: now,
           url: albumUrlFromAlbumId(albumId),
           title: opts.readTitle(albumId),
         };
-        await hideAlbum(entry);
+        const done = hideAlbum(entry);
+        delete host.dataset.extToggleSig;
+        paintHideAlbumToggle(host, albumId);
+        await done;
         opts.sp.showNotification("Album hidden");
         opts.onDidHide?.(albumId);
       }
+    } catch (e) {
       delete host.dataset.extToggleSig;
       paintHideAlbumToggle(host, albumId);
-    } catch {
-      opts.sp.showNotification("Hide toggle failed", true);
+      const code =
+        e && typeof e === "object" && "code" in e
+          ? String((e as { code?: string }).code)
+          : "";
+      opts.sp.showNotification(
+        code === "auth-required"
+          ? "Sign in to sync with Hide Albums in Spotify"
+          : "Could not update album",
+        true,
+      );
     } finally {
       busy = false;
       btn.disabled = false;
@@ -111,8 +127,6 @@ export function paintHideAlbumToggle(
   btn.classList.add("ext-btn", hidden ? "ext-btn--unhide" : "ext-btn--hide");
   btn.setAttribute(
     "aria-label",
-    hidden
-      ? "Show this album on Spotify again"
-      : "Hide this album in your hidden list",
+    hidden ? "Unhide this album" : "Hide this album",
   );
 }

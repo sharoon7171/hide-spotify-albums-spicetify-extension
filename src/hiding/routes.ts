@@ -1,7 +1,4 @@
-import { isDiscographyPath } from "@/hiding/discography";
 import { isSearchRoute, XpuiDom } from "@/hiding/re";
-
-export { isDiscographyPath, isSearchRoute };
 
 export function routePathname(): string {
   try {
@@ -18,7 +15,7 @@ export function routePathname(): string {
   }
 }
 
-export function isSearchPath(pathname: string): boolean {
+function isSearchPath(pathname: string): boolean {
   return isSearchRoute(pathname);
 }
 

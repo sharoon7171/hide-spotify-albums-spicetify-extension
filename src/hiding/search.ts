@@ -1,7 +1,7 @@
 import { albumIdFromEncoreElement } from "@/hiding/dom";
 import { XpuiDom } from "@/hiding/re";
 
-export const XpuiSearchDom = {
+const XpuiSearchDom = {
   categoryCard: '[data-testid^="search-category-card"]',
   encoreCard: '[data-encore-id="card"]',
   encoreListRow: '[data-encore-id="listRow"]',

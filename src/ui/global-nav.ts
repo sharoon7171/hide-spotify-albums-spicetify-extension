@@ -4,13 +4,13 @@ import {
   hiddenAlbumsIconViewBox,
 } from "@/ui/hidden-albums-icon";
 
-export const GlobalNavClass = {
+const GlobalNavClass = {
   searchContainer: "main-globalNav-searchContainer",
   navLink: "main-globalNav-navLink",
   linkIcon: "main-globalNav-link-icon",
 } as const;
 
-export const GlobalNavAttr = {
+const GlobalNavAttr = {
   homeButton: "home-button",
 } as const;
 
@@ -25,7 +25,7 @@ const SVG_ATTRS_FROM_HOME = [
 const NAV_SLOT_ID = "spicetify-ext-hidden-albums-nav";
 const NAV_BUTTON_ROLE = "hidden-albums-nav";
 
-export type HiddenAlbumsNavMount = {
+type HiddenAlbumsNavMount = {
   sync: () => void;
   remove: () => void;
 };
@@ -34,7 +34,7 @@ function hiddenAlbumsIconPaths(): string {
   return HIDDEN_ALBUMS_ICON_PATHS;
 }
 
-export function queryHomeButton(): HTMLButtonElement | null {
+function queryHomeButton(): HTMLButtonElement | null {
   const root = document.querySelector<HTMLElement>(
     `.${GlobalNavClass.searchContainer}`,
   );
@@ -48,7 +48,7 @@ export function queryHomeButton(): HTMLButtonElement | null {
   );
 }
 
-export function querySearchContainer(): HTMLElement | null {
+function querySearchContainer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(
     `.${GlobalNavClass.searchContainer}`,
   );
@@ -97,7 +97,7 @@ function wireButton(
   sp: typeof Spicetify,
   onClick: () => void,
 ): void {
-  btn.setAttribute("aria-label", "Hidden albums");
+  btn.setAttribute("aria-label", "Hide Albums in Spicetify");
   btn.type = "button";
   btn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -113,7 +113,7 @@ function wireButton(
   };
   if (typeof spx.Tippy === "function") {
     spx.Tippy(btn, {
-      content: "Hidden albums",
+      content: "Hide Albums in Spicetify",
       ...(spx.TippyProps ?? {}),
     });
   }

@@ -1,4 +1,4 @@
-export type PageSyncHandler = () => void;
+type PageSyncHandler = () => void;
 
 export function bindPageSync(
   sp: typeof Spicetify,

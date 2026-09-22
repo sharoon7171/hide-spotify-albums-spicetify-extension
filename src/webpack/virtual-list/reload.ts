@@ -13,7 +13,7 @@ import {
 import { findModuleIdByExportBody } from "@/webpack/require";
 import type { WebpackRequire } from "@/webpack/require";
 
-export function resolveVirtualListModuleId(req: WebpackRequire): string {
+function resolveVirtualListModuleId(): string {
   return findModuleIdByExportBody(VIRTUAL_LIST_NEEDLE) ?? VIRTUAL_LIST_MODULE;
 }
 
@@ -49,7 +49,7 @@ export function applyVirtualListAlbumPatch(
   if (virtualListExportPatched) return true;
 
   const patch = createVirtualListPatch(patchCtx);
-  const moduleId = resolveVirtualListModuleId(req);
+  const moduleId = resolveVirtualListModuleId();
 
   patch.patchFactoryMap(req.m);
   if (patch.patchModuleExport(req, moduleId)) {

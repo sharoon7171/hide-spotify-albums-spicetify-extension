@@ -1,4 +1,4 @@
-export const HIDDEN_ALBUMS_ICON_VIEWBOX = 24;
+const HIDDEN_ALBUMS_ICON_VIEWBOX = 24;
 
 const stroke =
   'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';

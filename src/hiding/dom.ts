@@ -45,13 +45,13 @@ export function albumIdFromEncoreElement(el: Element): string | null {
   return null;
 }
 
-export function isSearchDomContext(el: Element): boolean {
+function isSearchDomContext(el: Element): boolean {
   if (el.closest(XpuiDom.searchResults)) return true;
   if (el.closest(XpuiDom.searchInputSection)) return true;
   return false;
 }
 
-export function isLibraryDomContext(el: Element, pathname: string): boolean {
+function isLibraryDomContext(el: Element, pathname: string): boolean {
   for (const sel of LIBRARY_ANCESTORS) {
     if (el.closest(sel)) return true;
   }
@@ -64,7 +64,7 @@ export function restoreAllDomHiding(): void {
   restoreDomHiding(document);
 }
 
-export function restoreDomHiding(root: ParentNode): void {
+function restoreDomHiding(root: ParentNode): void {
   for (const el of root.querySelectorAll(`[${HIDDEN_ATTR}="1"]`)) {
     if (!(el instanceof HTMLElement)) continue;
     el.removeAttribute(HIDDEN_ATTR);

@@ -1,4 +1,4 @@
-import { readHiddenAlbumIdsEarly } from "@/albums/store";
+import { readHiddenAlbumIdsEarly } from "@/albums/early-ids";
 import {
   createVirtualListPatch,
   VIRTUAL_LIST_NEEDLE,
