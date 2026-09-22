@@ -7,10 +7,24 @@ declare namespace Spicetify {
 
   const Platform: {
     History: {
-      location: { pathname: string };
+      location: {
+        pathname: string;
+        search?: string;
+        hash?: string;
+        state?: unknown;
+      };
       listen: (cb: (loc: { pathname: string }) => void) => () => void;
       push: (path: string) => void;
-      replace?: (path: string) => void;
+      replace: (
+        path:
+          | string
+          | {
+              pathname: string;
+              search?: string;
+              hash?: string;
+              state?: unknown;
+            },
+      ) => void;
     };
   };
 
