@@ -4,6 +4,6 @@ import { registerFeatures } from "@/features/registry";
 
 void (async () => {
   const sp = await waitForSpicetify();
-  await startAlbumSync();
   registerFeatures(sp);
+  void startAlbumSync();
 })();
