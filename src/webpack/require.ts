@@ -31,12 +31,18 @@ export function getWebpackRequire(): WebpackRequire | null {
   }
 }
 
-export function findModuleIdByExportBody(needle: string): string | null {
+export function findModuleIdByExportBody(
+  match: string | ((source: string) => boolean),
+): string | null {
   const req = getWebpackRequire();
   if (!req) return null;
+  const test =
+    typeof match === "function"
+      ? match
+      : (source: string) => source.includes(match);
   for (const id of Object.keys(req.m)) {
     const factory = req.m[id];
-    if (typeof factory === "function" && factory.toString().includes(needle)) {
+    if (typeof factory === "function" && test(factory.toString())) {
       return id;
     }
   }
