@@ -138,11 +138,14 @@ Or step by step:
 
 | Layer | What it holds |
 | --- | --- |
-| Firestore `users/{uid}/savedAlbums/{albumId}` | One doc per album (`updatedAt`, optional `title` / `url`) |
-| Firestore persistent cache | Client source of truth; `onSnapshot` drives the store and UI |
-| `localStorage` | **Hide in Grids** only (device-local, not synced) |
+| Firebase Auth (IndexedDB) | Signed-in user (`uid`); restored before Firestore reads |
+| Firestore `users/{uid}/savedAlbums/{albumId}` | Server copy of each hidden album (`updatedAt`, optional `title` / `url`) |
+| Firestore persistent cache | Local Firestore copy for that `uid`; hydrated with `getDocsFromCache` after Auth settles |
+| `onSnapshot` | Live sync with the server after the cache hydrate |
+| `localStorage` `hide-albums-ids-v1` | Hidden album ID list for **instant** hide on the next Spotify launch (device-local) |
+| `localStorage` `hide-albums-hide-tiles` | **Hide in Grids** on/off (device-local, not synced) |
 
-The in-app store mirrors Firestore via cache hydrate plus realtime listeners. Hide / unhide updates that mirror optimistically, then the same listeners keep Chrome and desktop aligned.
+Bootstrap and post-snapshot scripts read the local ID list **synchronously** before Spotify’s UI finishes loading, so grids can hide without waiting on Firebase. Auth + Firestore persistent cache + `onSnapshot` keep that list and the manager panel in sync with Chrome. Sign-out clears the local ID mirror.
 
 ## Project Layout
 
