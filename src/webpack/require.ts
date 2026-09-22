@@ -1,3 +1,4 @@
+import { getWebpackChunk } from "@/webpack/chunk";
 import {
   cacheWebpackRequire,
   cachedWebpackRequire,
@@ -11,11 +12,7 @@ export type WebpackRequire = {
 export function getWebpackRequire(): WebpackRequire | null {
   const cached = cachedWebpackRequire();
   if (cached) return cached;
-  const chunk = (globalThis as typeof globalThis & {
-    webpackChunkclient_web?: unknown;
-  }).webpackChunkclient_web as
-    | { push: (args: unknown[]) => WebpackRequire }
-    | undefined;
+  const chunk = getWebpackChunk();
   if (!chunk) return null;
   try {
     const req = chunk.push([

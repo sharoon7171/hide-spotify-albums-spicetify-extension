@@ -1,3 +1,4 @@
+import { getWebpackChunk } from "@/webpack/chunk";
 import type { WebpackRequire } from "@/webpack/require";
 
 const EXPOSE_KEY = "__spicetifyExtWebpackRequire" as const;
@@ -18,11 +19,7 @@ export function cachedWebpackRequire(): WebpackRequire | null {
 }
 
 export function obtainWebpackRequire(): WebpackRequire | null {
-  const chunk = (globalThis as typeof globalThis & {
-    webpackChunkclient_web?: unknown;
-  }).webpackChunkclient_web as
-    | { push: (args: unknown[]) => WebpackRequire }
-    | undefined;
+  const chunk = getWebpackChunk();
   if (!chunk) return null;
   try {
     const req = chunk.push([

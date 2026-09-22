@@ -1,3 +1,4 @@
+import { getWebpackChunk } from "@/webpack/chunk";
 import {
   evictWebpackModule,
   findWebpackModuleCache,
@@ -25,9 +26,7 @@ let evictAttempted = false;
 
 function evictVirtualListFromKnownCaches(moduleId: string): void {
   const roots: unknown[] = [globalThis];
-  const chunk = (globalThis as typeof globalThis & {
-    webpackChunkclient_web?: unknown[];
-  }).webpackChunkclient_web;
+  const chunk = getWebpackChunk();
   if (Array.isArray(chunk)) {
     roots.push(chunk);
     for (const entry of chunk) {

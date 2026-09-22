@@ -1,4 +1,5 @@
 import { readHiddenAlbumIdsEarly } from "@/albums/early-ids";
+import { watchWebpackChunk, type WebpackChunk } from "@/webpack/chunk";
 import {
   createVirtualListPatch,
   matchesVirtualListNeedle,
@@ -54,9 +55,9 @@ import {
 
   hookVirtualListOdp();
 
-  function hookChunkPush(chunk: { push: (entry: unknown) => unknown }): boolean {
-    const tagged = chunk as { __spicetifyExtChunkHook?: boolean };
-    if (tagged.__spicetifyExtChunkHook) return true;
+  function hookChunkPush(chunk: WebpackChunk): void {
+    const tagged = chunk as WebpackChunk & { __spicetifyExtChunkHook?: boolean };
+    if (tagged.__spicetifyExtChunkHook) return;
     const original = chunk.push.bind(chunk);
     chunk.push = (entry: unknown) => {
       const tuple = entry as [
@@ -69,39 +70,9 @@ import {
       return original(entry);
     };
     tagged.__spicetifyExtChunkHook = true;
-    return true;
   }
 
-  function installChunkHook(): boolean {
-    const chunk = (globalThis as typeof globalThis & {
-      webpackChunkclient_web?: unknown;
-    }).webpackChunkclient_web as { push: (entry: unknown) => unknown } | undefined;
-    if (!chunk) return false;
-    return hookChunkPush(chunk);
-  }
-
-  if (!installChunkHook()) {
-    let chunkValue: unknown;
-    Object.defineProperty(globalThis, "webpackChunkclient_web", {
-      configurable: true,
-      enumerable: true,
-      get() {
-        return chunkValue;
-      },
-      set(value) {
-        chunkValue = value;
-        Object.defineProperty(globalThis, "webpackChunkclient_web", {
-          value,
-          writable: true,
-          configurable: true,
-          enumerable: true,
-        });
-        if (value && typeof (value as { push?: unknown }).push === "function") {
-          hookChunkPush(value as { push: (entry: unknown) => unknown });
-        }
-      },
-    });
-  }
+  watchWebpackChunk(hookChunkPush);
 
   (globalThis as typeof globalThis & { __spicetifyExtBootstrap?: boolean })
     .__spicetifyExtBootstrap = true;
