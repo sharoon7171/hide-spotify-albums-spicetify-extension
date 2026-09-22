@@ -3,13 +3,7 @@ import {
   docIdForSavedAlbum,
   type SavedAlbum,
 } from "@/albums/saved-album";
-import {
-  clearPersistedHiddenAlbumIds,
-  persistHiddenAlbumIds,
-  seedLiveHiddenAlbumIdsFromStorage,
-  setLiveHiddenAlbumIds,
-  readHiddenAlbumIdsEarly,
-} from "@/albums/early-ids";
+import { setLiveHiddenAlbumIds } from "@/albums/early-ids";
 import {
   clearAllAlbums,
   loadAlbumsFromCache,
@@ -25,7 +19,7 @@ import {
   watchAuth,
   type FirebaseUserView,
 } from "@/lib/firebase/auth";
-import { firebaseAuthReady } from "@/lib/firebase/app";
+import { firebaseAuthReady, firestoreDb } from "@/lib/firebase/app";
 
 type AlbumListener = (albums: Record<string, SavedAlbum>) => void;
 type AuthListener = (user: FirebaseUserView | null) => void;
@@ -66,24 +60,15 @@ function writeLocalHideTiles(value: boolean): void {
 }
 
 function rebuildHiddenIdCache(): Set<string> {
-  if (!hideTilesEnabled) {
-    const out = new Set<string>();
-    hiddenIdCache = out;
-    setLiveHiddenAlbumIds(out);
-    return out;
-  }
-  if (!uid) {
-    seedLiveHiddenAlbumIdsFromStorage();
-    hiddenIdCache = new Set(readHiddenAlbumIdsEarly());
-    return hiddenIdCache;
-  }
   const out = new Set<string>();
-  for (const row of Object.values(albums)) {
-    const id = albumIdFromSavedAlbum(row);
-    if (id) out.add(id);
+  if (uid && hideTilesEnabled) {
+    for (const row of Object.values(albums)) {
+      const id = albumIdFromSavedAlbum(row);
+      if (id) out.add(id);
+    }
   }
   hiddenIdCache = out;
-  persistHiddenAlbumIds(out);
+  setLiveHiddenAlbumIds(out);
   return out;
 }
 
@@ -113,10 +98,12 @@ function detachAlbumListeners(): void {
   unsubAlbums = null;
 }
 
-function attachAlbumListeners(userId: string): void {
+async function attachAlbumListeners(userId: string): Promise<void> {
   detachAlbumListeners();
   const epoch = ++syncEpoch;
-  void hydrateFromCache(userId, epoch);
+  const cached = await loadAlbumsFromCache(userId);
+  if (epoch !== syncEpoch || uid !== userId) return;
+  applyAlbums(cached ?? {});
   unsubAlbums = subscribeAlbums(
     userId,
     (next) => {
@@ -125,12 +112,6 @@ function attachAlbumListeners(userId: string): void {
     },
     () => undefined,
   );
-}
-
-async function hydrateFromCache(userId: string, epoch: number): Promise<void> {
-  const cached = await loadAlbumsFromCache(userId);
-  if (epoch !== syncEpoch || uid !== userId || !cached) return;
-  applyAlbums(cached);
 }
 
 export function hiddenAlbumIdSet(): Set<string> {
@@ -284,33 +265,24 @@ export async function startAlbumSync(): Promise<() => void> {
   if (started) return () => undefined;
   started = true;
   hideTilesEnabled = readLocalHideTiles();
-  seedLiveHiddenAlbumIdsFromStorage();
-  hiddenIdCache = null;
+  firestoreDb();
   await firebaseAuthReady();
   unsubAuth = watchAuth((user) => {
-    const view = userView(user);
-    const nextUid = view?.uid ?? null;
-    const prevUid = uid;
-    uid = nextUid;
-    emitAuth(view);
-    if (!view) {
-      syncEpoch += 1;
-      detachAlbumListeners();
-      clearPersistedHiddenAlbumIds();
-      albums = {};
-      hiddenIdCache = null;
-      emitAlbums();
-      return;
-    }
-    if (prevUid && prevUid !== nextUid) {
-      albums = {};
-      hiddenIdCache = null;
-      clearPersistedHiddenAlbumIds();
-    } else if (prevUid !== nextUid) {
-      albums = {};
-      hiddenIdCache = null;
-    }
-    attachAlbumListeners(view.uid);
+    void (async () => {
+      const view = userView(user);
+      const nextUid = view?.uid ?? null;
+      if (!view) {
+        syncEpoch += 1;
+        detachAlbumListeners();
+        uid = null;
+        applyAlbums({});
+        emitAuth(null);
+        return;
+      }
+      uid = nextUid;
+      await attachAlbumListeners(view.uid);
+      emitAuth(view);
+    })();
   });
   return () => {
     syncEpoch += 1;
