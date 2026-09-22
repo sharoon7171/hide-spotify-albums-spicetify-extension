@@ -5,7 +5,7 @@ import {
   disposeManagerPanel,
 } from "@/features/hidden-albums-manager/panel";
 
-const MODAL_TITLE = "Hidden albums";
+const MODAL_TITLE = "Hide Albums in Spicetify";
 
 export function initHiddenAlbumsManager(sp: typeof Spicetify): () => void {
   let panelHost: HTMLElement | null = null;

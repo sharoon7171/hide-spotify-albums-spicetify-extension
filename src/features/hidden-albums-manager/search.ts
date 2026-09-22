@@ -1,6 +1,6 @@
 import type { HiddenAlbumEntry } from "@/albums/store";
 
-export function normalizeAlbumSearchQuery(raw: string): string {
+function normalizeAlbumSearchQuery(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
@@ -14,7 +14,7 @@ function haystack(entry: HiddenAlbumEntry): string {
   return parts.join(" ").toLowerCase();
 }
 
-export function matchesAlbumSearch(
+function matchesAlbumSearch(
   entry: HiddenAlbumEntry,
   rawQuery: string,
 ): boolean {

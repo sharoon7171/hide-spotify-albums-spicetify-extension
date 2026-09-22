@@ -1,10 +1,17 @@
 import {
   clearAllHiddenAlbums,
+  getHideTilesEnabled,
   listHiddenAlbumEntries,
   removeByDocId,
+  setHideAlbumTiles,
+  signIn,
+  signOut,
+  subscribeAuth,
   subscribeHiddenAlbums,
+  subscribeHideTilesSetting,
   type HiddenAlbumEntry,
 } from "@/albums/store";
+import type { FirebaseUserView } from "@/lib/firebase/auth";
 import { filterHiddenAlbumEntries } from "@/features/hidden-albums-manager/search";
 import { managerPanelCss } from "@/features/hidden-albums-manager/styles";
 
@@ -17,6 +24,10 @@ type PanelHandles = {
   confirmBox: HTMLElement;
   confirmText: HTMLElement;
   confirmDeleteBtn: HTMLButtonElement;
+  authStatusEl: HTMLElement;
+  authBtn: HTMLButtonElement;
+  hideTilesSwitch: HTMLButtonElement;
+  settingsEl: HTMLElement;
 };
 
 const SEARCH_ICON =
@@ -43,13 +54,126 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   const meta = document.createElement("p");
   meta.className = "header__meta";
   meta.textContent =
-    "Albums you hide on album pages appear here, newest first.";
+    "Hide albums from Home, Artist, Search, and carousels. Unhide from any album page.";
 
   const countEl = document.createElement("p");
   countEl.className = "header__count";
   countEl.dataset.role = "count";
 
   headerCopy.append(meta, countEl);
+
+  const prefs = document.createElement("section");
+  prefs.className = "prefs";
+
+  const auth = document.createElement("div");
+  auth.className = "prefs__card account";
+  auth.dataset.state = "loading";
+
+  const authSession = document.createElement("div");
+  authSession.className = "account__session";
+
+  const authStatusEl = document.createElement("div");
+  authStatusEl.className = "account__status";
+  authStatusEl.dataset.role = "auth-status";
+
+  const authStatusEmail = document.createElement("p");
+  authStatusEmail.className = "account__email";
+  authStatusEmail.textContent = "Checking sign-in…";
+
+  const authStatusHint = document.createElement("p");
+  authStatusHint.className = "account__hint";
+  authStatusHint.textContent = "Signed in · syncs with Hide Albums in Spotify";
+
+  authStatusEl.append(authStatusEmail, authStatusHint);
+
+  const authBtn = document.createElement("button");
+  authBtn.type = "button";
+  authBtn.className = "btn btn--ghost btn--compact";
+  authBtn.dataset.role = "auth-btn";
+  authBtn.textContent = "Sign Out";
+  authBtn.disabled = true;
+
+  authSession.append(authStatusEl, authBtn);
+
+  const authForm = document.createElement("form");
+  authForm.className = "account__form";
+  authForm.dataset.role = "auth-form";
+
+  const formTitle = document.createElement("p");
+  formTitle.className = "account__title";
+  formTitle.textContent = "Sign In";
+
+  const formHint = document.createElement("p");
+  formHint.className = "account__hint";
+  formHint.textContent =
+    "Sign in to sync with Hide Albums in Spotify on open.spotify.com.";
+
+  const emailInput = document.createElement("input");
+  emailInput.type = "email";
+  emailInput.className = "account__input";
+  emailInput.placeholder = "Email";
+  emailInput.autocomplete = "email";
+  emailInput.required = true;
+  emailInput.dataset.role = "auth-email";
+
+  const passwordInput = document.createElement("input");
+  passwordInput.type = "password";
+  passwordInput.className = "account__input";
+  passwordInput.placeholder = "Password";
+  passwordInput.autocomplete = "current-password";
+  passwordInput.required = true;
+  passwordInput.minLength = 6;
+  passwordInput.dataset.role = "auth-password";
+
+  const authActions = document.createElement("div");
+  authActions.className = "account__actions";
+
+  const signInBtn = document.createElement("button");
+  signInBtn.type = "submit";
+  signInBtn.className = "btn btn--primary";
+  signInBtn.textContent = "Sign In";
+  signInBtn.dataset.role = "auth-signin";
+
+  authActions.append(signInBtn);
+  authForm.append(formTitle, formHint, emailInput, passwordInput, authActions);
+  auth.append(authSession, authForm);
+
+  const settingsEl = document.createElement("div");
+  settingsEl.className = "prefs__card settings";
+  settingsEl.dataset.role = "settings";
+  settingsEl.hidden = true;
+
+  const settingsCopy = document.createElement("div");
+  settingsCopy.className = "settings__copy";
+
+  const settingsTitle = document.createElement("p");
+  settingsTitle.className = "settings__title";
+  settingsTitle.textContent = "Hide in Grids";
+
+  const settingsHint = document.createElement("p");
+  settingsHint.className = "settings__hint";
+  settingsHint.textContent =
+    "When on, hidden albums stay off Home, Artist, and Search. Album pages stay open.";
+
+  settingsCopy.append(settingsTitle, settingsHint);
+
+  const hideTilesSwitch = document.createElement("button");
+  hideTilesSwitch.type = "button";
+  hideTilesSwitch.className = "switch";
+  hideTilesSwitch.dataset.role = "hide-tiles-switch";
+  hideTilesSwitch.setAttribute("role", "switch");
+  hideTilesSwitch.setAttribute("aria-checked", "true");
+  hideTilesSwitch.setAttribute("aria-label", "Hide albums in grids");
+
+  const switchThumb = document.createElement("span");
+  switchThumb.className = "switch__thumb";
+  hideTilesSwitch.append(switchThumb);
+
+  const settingsControl = document.createElement("div");
+  settingsControl.className = "settings__control";
+  settingsControl.append(hideTilesSwitch);
+  settingsEl.append(settingsCopy, settingsControl);
+  prefs.append(auth, settingsEl);
 
   const toolbar = document.createElement("div");
   toolbar.className = "toolbar";
@@ -60,7 +184,7 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   const clearBtn = document.createElement("button");
   clearBtn.type = "button";
   clearBtn.className = "btn btn--danger";
-  clearBtn.textContent = "Delete all";
+  clearBtn.textContent = "Clear All";
   clearBtn.dataset.role = "clear-all";
   clearBtn.setAttribute("aria-haspopup", "dialog");
   clearBtn.setAttribute("aria-expanded", "false");
@@ -87,7 +211,7 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   const confirmDeleteBtn = document.createElement("button");
   confirmDeleteBtn.type = "button";
   confirmDeleteBtn.className = "btn btn--danger";
-  confirmDeleteBtn.textContent = "Delete all";
+  confirmDeleteBtn.textContent = "Clear All";
   confirmDeleteBtn.dataset.role = "confirm-delete";
 
   confirmActions.append(confirmCancelBtn, confirmDeleteBtn);
@@ -115,7 +239,7 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   searchInput.type = "search";
   searchInput.id = "spicetify-ext-hidden-albums-search";
   searchInput.className = "search__field";
-  searchInput.placeholder = "Album name or Spotify album ID";
+  searchInput.placeholder = "Album name or ID";
   searchInput.autocomplete = "off";
   searchInput.spellcheck = false;
   searchInput.dataset.role = "search";
@@ -135,7 +259,11 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   listEl.dataset.role = "list";
   listWrap.appendChild(listEl);
 
-  panel.append(header, search, listWrap);
+  const library = document.createElement("section");
+  library.className = "library";
+  library.append(header, search, listWrap);
+
+  panel.append(prefs, library);
   shadow.appendChild(panel);
 
   const handles: PanelHandles = {
@@ -147,7 +275,80 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
     confirmBox,
     confirmText,
     confirmDeleteBtn,
+    authStatusEl: authStatusEmail,
+    authBtn,
+    hideTilesSwitch,
+    settingsEl,
   };
+
+  let user: FirebaseUserView | null = null;
+
+  const paintHideTiles = (enabled: boolean) => {
+    handles.hideTilesSwitch.setAttribute(
+      "aria-checked",
+      enabled ? "true" : "false",
+    );
+    handles.hideTilesSwitch.dataset.on = enabled ? "true" : "false";
+  };
+
+  const paintAuth = () => {
+    handles.settingsEl.hidden = !user;
+    if (user) {
+      auth.dataset.state = "signed-in";
+      authStatusEmail.textContent = user.email ?? user.displayName ?? user.uid;
+      authBtn.disabled = false;
+      paintHideTiles(getHideTilesEnabled());
+      return;
+    }
+    auth.dataset.state = "signed-out";
+    authStatusEmail.textContent = "Not signed in";
+    authBtn.disabled = true;
+    signInBtn.disabled = false;
+  };
+
+  const runSignIn = async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) {
+      sp.showNotification("Enter email and password", true);
+      return;
+    }
+    auth.dataset.state = "loading";
+    signInBtn.disabled = true;
+    try {
+      await signIn(email, password);
+      passwordInput.value = "";
+      sp.showNotification("Signed in");
+    } catch {
+      sp.showNotification("Sign in failed", true);
+    } finally {
+      paintAuth();
+    }
+  };
+
+  authForm.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    void runSignIn();
+  });
+
+  authBtn.addEventListener("click", async () => {
+    authBtn.disabled = true;
+    try {
+      await signOut();
+      sp.showNotification("Signed out");
+    } catch {
+      sp.showNotification("Sign out failed", true);
+    } finally {
+      paintAuth();
+    }
+  });
+
+  hideTilesSwitch.addEventListener("click", () => {
+    if (!user) return;
+    const next = !getHideTilesEnabled();
+    void setHideAlbumTiles(next);
+    sp.showNotification(next ? "Grid hide is on" : "Grid hide is off");
+  });
 
   const setConfirm = (open: boolean) => {
     confirmBox.dataset.visible = open ? "true" : "false";
@@ -157,7 +358,7 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
   clearBtn.addEventListener("click", () => {
     const n = listHiddenAlbumEntries().length;
     if (n === 0) return;
-    confirmText.textContent = `Remove all ${n} hidden album${n === 1 ? "" : "s"}? This cannot be undone.`;
+    confirmText.textContent = `Clear all ${n} hidden album${n === 1 ? "" : "s"}? This updates every signed-in device.`;
     setConfirm(true);
   });
 
@@ -171,11 +372,22 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
       setConfirm(false);
       searchInput.value = "";
       sp.showNotification(
-        n === 0 ? "No hidden albums" : `Removed ${n} hidden album${n === 1 ? "" : "s"}`,
+        n === 0
+          ? "Nothing to clear"
+          : `Cleared ${n} album${n === 1 ? "" : "s"}`,
       );
       paint(handles, sp);
-    } catch {
-      sp.showNotification("Could not clear hidden albums", true);
+    } catch (e) {
+      const code =
+        e && typeof e === "object" && "code" in e
+          ? String((e as { code?: string }).code)
+          : "";
+      sp.showNotification(
+        code === "auth-required"
+          ? "Sign in to continue"
+          : "Could not clear hidden albums",
+        true,
+      );
     } finally {
       confirmDeleteBtn.disabled = false;
       clearBtn.disabled = false;
@@ -188,10 +400,25 @@ export function createManagerPanel(sp: typeof Spicetify): HTMLElement {
     if (host.isConnected) paint(handles, sp);
   });
 
-  host.addEventListener("spicetify-ext-manager-dispose", () => {
-    offStore();
+  const offHideTiles = subscribeHideTilesSetting((enabled) => {
+    if (host.isConnected) paintHideTiles(enabled);
   });
 
+  const offAuth = subscribeAuth((next) => {
+    user = next;
+    if (host.isConnected) {
+      paintAuth();
+      paint(handles, sp);
+    }
+  });
+
+  host.addEventListener("spicetify-ext-manager-dispose", () => {
+    offStore();
+    offHideTiles();
+    offAuth();
+  });
+
+  paintAuth();
   paint(handles, sp);
   queueMicrotask(() => searchInput.focus());
   return host;
@@ -206,19 +433,19 @@ function paint(handles: PanelHandles, sp: typeof Spicetify): void {
   const searching = query.trim().length > 0;
 
   if (total === 0) {
-    handles.countEl.textContent = "0 albums hidden";
+    handles.countEl.textContent = "No hidden albums";
     handles.searchHintEl.textContent = "";
     handles.searchInput.disabled = true;
   } else if (!searching) {
-    handles.countEl.textContent = `${total} album${total === 1 ? "" : "s"} hidden`;
-    handles.searchHintEl.textContent = "Sorted by most recently hidden";
+    handles.countEl.textContent = `${total} hidden album${total === 1 ? "" : "s"}`;
+    handles.searchHintEl.textContent = "Newest first · synced when signed in";
     handles.searchInput.disabled = false;
   } else {
-    handles.countEl.textContent = `${shown} of ${total} album${total === 1 ? "" : "s"}`;
+    handles.countEl.textContent = `${shown} of ${total}`;
     handles.searchHintEl.textContent =
       shown === 0
-        ? "No match for this search"
-        : `Showing ${shown} match${shown === 1 ? "" : "es"}`;
+        ? "No matches"
+        : `${shown} match${shown === 1 ? "" : "es"}`;
     handles.searchInput.disabled = false;
   }
 
@@ -253,8 +480,8 @@ function buildEmptyState(noSearchMatch: boolean): HTMLElement {
   const emptyHint = document.createElement("p");
   emptyHint.className = "empty__hint";
   emptyHint.textContent = noSearchMatch
-    ? "Try another name or paste the album ID from the album URL."
-    : "Use Hide on an album page to add albums to this list.";
+    ? "Try another title or album ID."
+    : "Open an album and choose Hide.";
   empty.append(emptyTitle, emptyHint);
   return empty;
 }
@@ -299,9 +526,18 @@ function buildRow(row: HiddenAlbumEntry, sp: typeof Spicetify): HTMLElement {
     removeBtn.disabled = true;
     try {
       await removeByDocId(row.docId);
-      sp.showNotification("Album removed from hidden list");
-    } catch {
-      sp.showNotification("Could not remove album", true);
+      sp.showNotification("Album unhidden");
+    } catch (e) {
+      const code =
+        e && typeof e === "object" && "code" in e
+          ? String((e as { code?: string }).code)
+          : "";
+      sp.showNotification(
+        code === "auth-required"
+          ? "Sign in to continue"
+          : "Could not remove album",
+        true,
+      );
     } finally {
       removeBtn.disabled = false;
     }
