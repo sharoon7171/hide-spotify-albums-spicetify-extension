@@ -1,4 +1,5 @@
 import { readHiddenAlbumIdsEarly } from "@/albums/early-ids";
+import { createAlbumTrackTitleHidePatch } from "@/webpack/album-track-title-hide/patch";
 import { watchWebpackChunk, type WebpackChunk } from "@/webpack/chunk";
 import {
   createVirtualListPatch,
@@ -12,6 +13,7 @@ import {
     albumUriRe: ALBUM_URI,
   };
   const virtualListPatch = createVirtualListPatch(patchCtx);
+  const titleHidePatch = createAlbumTrackTitleHidePatch();
 
   function hookVirtualListOdp(): void {
     const tagged = globalThis as typeof globalThis & {
@@ -66,7 +68,10 @@ import {
         unknown,
       ];
       const modules = tuple[1];
-      if (modules) virtualListPatch.patchFactoryMap(modules);
+      if (modules) {
+        virtualListPatch.patchFactoryMap(modules);
+        titleHidePatch.patchFactoryMap(modules);
+      }
       return original(entry);
     };
     tagged.__spicetifyExtChunkHook = true;
