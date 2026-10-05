@@ -1,6 +1,6 @@
 # Hide Albums in Spicetify
 
-Spicetify extension for the Spotify desktop client. It hides albums on Home, Artist, Artist Discography, Search, and carousels while album pages stay open. On album pages it also adds Spotify’s native **Hide in This Album** / **Show in This Album** control next to each track title (always visible, no context menu), using the same account sync path as the desktop right-click action.
+Spicetify extension for the Spotify desktop client. It hides albums on Home, Artist, Artist Discography, Search, and carousels while album pages stay open. On album pages and Artist Discography list track rows it also adds Spotify’s native **Hide in This Album** / **Show in This Album** control next to each track title (always visible, no context menu), using the same account sync path as the desktop right-click action.
 
 Pair album hiding with [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) by pointing both at the **same Firebase project** and signing in with the **same account**. Track hide/show syncs through your Spotify account, not Firebase.
 
@@ -80,9 +80,9 @@ Marketplace is optional. This extension is applied from source with `npm run app
 5. With **Hide in Grids** on, that album leaves Home, Artist, Artist Discography (grid and list), Search, and carousels
 6. Unhide from the album page, the discography list control, or the manager panel
 
-### Hide Songs on Album Pages
+### Hide Songs on Album and Discography Lists
 
-On an album tracklist, use the control beside each song title:
+On an album tracklist, or on Artist Discography in list mode (tracks under each release), use the control beside each song title:
 
 - **Hide in This Album** — red ban icon; hides that track in this album context
 - **Show in This Album** — green ban-active icon; restores a hidden track
