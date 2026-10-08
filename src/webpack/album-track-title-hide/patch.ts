@@ -8,16 +8,11 @@ const ALBUM_ROW_NEEDLES = [
 
 const TITLE_WRAP_CLASS = "spicetify-ext-album-track-title";
 
-const DURATION_BANNED_ONLY =
-  'en&&ea&&(0,n.jsx)(u.A,{itemUri:e,contextUri:q,contextName:H??r.Ru.get("album"),isBanned:en}),';
-
-const BAN =
-  'ea?(0,n.jsx)(u.A,{itemUri:e,contextUri:q,contextName:H??r.Ru.get("album"),isBanned:en}):null';
+const DURATION_BANNED_RE =
+  /en&&ea&&\(0,n\.jsx\)\(u\.A,\{itemUri:e,contextUri:q,contextName:H\?\?[a-z]\.Ru\.get\("album"\),isBanned:en\}\),/;
 
 const TITLE_NODE =
   'eg&&W?(0,n.jsx)(o.N,{to:e,className:B.A.rowTitle,"data-testid":"internal-track-link",children:(0,n.jsx)(R.p,{titleText:t,children:t})}):(0,n.jsx)(R.p,{titleText:t,children:t})';
-
-const TITLE_WRAP = `(0,n.jsxs)("div",{className:"${TITLE_WRAP_CLASS}",children:[${TITLE_NODE},${BAN}]})`;
 
 const scannedFactories = new WeakSet<object>();
 
@@ -39,6 +34,14 @@ type MemoExport = {
   compare?: unknown;
 };
 
+function banBesideTitle(ruVar: string): string {
+  return `ea?(0,n.jsx)(u.A,{itemUri:e,contextUri:q,contextName:H??${ruVar}.Ru.get("album"),isBanned:en}):null`;
+}
+
+function titleWrap(ban: string): string {
+  return `(0,n.jsxs)("div",{className:"${TITLE_WRAP_CLASS}",children:[${TITLE_NODE},${ban}]})`;
+}
+
 function isAlbumRowFactory(factory: unknown): factory is WebpackFactory {
   if (typeof factory !== "function") return false;
   if ((factory as TaggedFactory).__spicetifyExtAlbumTitleHide) return true;
@@ -51,19 +54,19 @@ function isAlbumRowFactory(factory: unknown): factory is WebpackFactory {
 }
 
 function transformAlbumRowSource(src: string): string | null {
-  if (src.includes(TITLE_WRAP_CLASS) && !src.includes(DURATION_BANNED_ONLY)) {
+  if (src.includes(TITLE_WRAP_CLASS) && !DURATION_BANNED_RE.test(src)) {
     return null;
   }
+  const dur = src.match(DURATION_BANNED_RE);
+  if (!dur) return null;
+  const ruVar = dur[0].match(/H\?\?([a-z])\.Ru\.get/)?.[1];
+  if (!ruVar) return null;
+  if (!src.includes(TITLE_NODE)) return null;
 
-  let next = src;
-  if (next.includes(DURATION_BANNED_ONLY)) {
-    next = next.split(DURATION_BANNED_ONLY).join("");
-  }
-  if (!next.includes(TITLE_WRAP_CLASS)) {
-    if (!next.includes(TITLE_NODE)) return null;
-    next = next.split(TITLE_NODE).join(TITLE_WRAP);
-  }
-  if (!next.includes(TITLE_WRAP_CLASS) || next.includes(DURATION_BANNED_ONLY)) {
+  const ban = banBesideTitle(ruVar);
+  const wrap = titleWrap(ban);
+  const next = src.replace(DURATION_BANNED_RE, "").split(TITLE_NODE).join(wrap);
+  if (!next.includes(TITLE_WRAP_CLASS) || DURATION_BANNED_RE.test(next)) {
     return null;
   }
   return next;
@@ -117,7 +120,7 @@ function patchLiveMemo(req: WebpackRequire): boolean {
     const typeSrc = memo.type.toString();
     if (
       typeSrc.includes(TITLE_WRAP_CLASS) &&
-      !typeSrc.includes(DURATION_BANNED_ONLY) &&
+      !DURATION_BANNED_RE.test(typeSrc) &&
       memo.type.__spicetifyExtAlbumTitleHide
     ) {
       return true;
