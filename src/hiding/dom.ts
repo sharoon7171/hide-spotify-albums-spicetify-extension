@@ -8,7 +8,9 @@ import {
 import { usesDomHiding } from "@/hiding/surfaces";
 
 let domObserver: MutationObserver | null = null;
+let mainWaitObserver: MutationObserver | null = null;
 let domScheduled = false;
+let observedRoot: ParentNode | null = null;
 
 const HIDDEN_ATTR = "data-spicetify-ext-album-hidden";
 
@@ -22,8 +24,9 @@ const LIBRARY_ANCESTORS = [
   XpuiDom.libraryPage,
 ];
 
-function domScope(): ParentNode {
-  return document.querySelector("main") ?? document.body;
+export function mainDomRoot(): HTMLElement | null {
+  const main = document.querySelector("main");
+  return main instanceof HTMLElement ? main : null;
 }
 
 export function albumIdFromEncoreElement(el: Element): string | null {
@@ -35,6 +38,12 @@ export function albumIdFromEncoreElement(el: Element): string | null {
   const title = el.querySelector('[id*="spotify:album:"]');
   if (title?.id) {
     const m = title.id.match(/spotify:album:([0-9A-Za-z]+)/);
+    if (m) return m[1];
+  }
+  const selfHref =
+    el instanceof HTMLAnchorElement ? el.getAttribute("href") : null;
+  if (selfHref) {
+    const m = selfHref.match(/\/album\/([^/?#]+)/);
     if (m) return m[1];
   }
   const link = el.querySelector('a[href*="/album/"]');
@@ -72,36 +81,69 @@ function restoreDomHiding(root: ParentNode): void {
   }
 }
 
-function armDomObserver(): void {
-  if (domObserver) return;
-  domObserver = new MutationObserver(() => {
-    if (domScheduled || !usesDomHiding() || isSearchActive()) return;
-    domScheduled = true;
-    requestAnimationFrame(() => {
-      domScheduled = false;
-      if (!usesDomHiding()) return;
-      applyHideAlbumDom(domScope(), routePathname(), hiddenAlbumIdSet());
-    });
+function disarmMainWaitObserver(): void {
+  mainWaitObserver?.disconnect();
+  mainWaitObserver = null;
+}
+
+function scheduleDomPass(): void {
+  if (domScheduled || !usesDomHiding() || isSearchActive()) return;
+  domScheduled = true;
+  requestAnimationFrame(() => {
+    domScheduled = false;
+    if (!usesDomHiding()) return;
+    applyHideAlbumDom(mainDomRoot(), routePathname(), hiddenAlbumIdSet());
   });
-  domObserver.observe(domScope(), { childList: true, subtree: true });
+}
+
+function armDomObserver(): void {
+  const root = mainDomRoot();
+  if (!root) {
+    if (mainWaitObserver) return;
+    mainWaitObserver = new MutationObserver(() => {
+      if (!mainDomRoot()) return;
+      disarmMainWaitObserver();
+      armDomObserver();
+      scheduleDomPass();
+    });
+    mainWaitObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+    return;
+  }
+  disarmMainWaitObserver();
+  if (domObserver && observedRoot === root) return;
+  domObserver?.disconnect();
+  observedRoot = root;
+  domObserver = new MutationObserver(() => scheduleDomPass());
+  domObserver.observe(root, { childList: true, subtree: true });
 }
 
 export function disarmDomObserver(): void {
   domObserver?.disconnect();
   domObserver = null;
+  observedRoot = null;
   domScheduled = false;
+  disarmMainWaitObserver();
 }
 
 export function applyHideAlbumDom(
-  root: ParentNode,
+  root: ParentNode | null,
   pathname: string,
   hidden: Set<string>,
 ): void {
   if (!usesDomHiding() || isSearchActive()) return;
   armDomObserver();
+  const main =
+    root instanceof HTMLElement && root.tagName === "MAIN"
+      ? root
+      : mainDomRoot();
+  if (!main) return;
   const selector = domHideSelector();
-  for (const el of root.querySelectorAll(selector)) {
+  for (const el of main.querySelectorAll(selector)) {
     if (!(el instanceof HTMLElement)) continue;
+    if (!el.closest("main")) continue;
     if (isSearchDomContext(el)) continue;
     if (isLibraryDomContext(el, pathname)) continue;
     const id = albumIdFromEncoreElement(el);

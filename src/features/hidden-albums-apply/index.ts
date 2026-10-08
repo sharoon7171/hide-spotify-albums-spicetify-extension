@@ -3,6 +3,7 @@ import {
   applyHideAlbumDom,
   disarmDomObserver,
   initHideAlbumDom,
+  mainDomRoot,
   restoreAllDomHiding,
 } from "@/hiding/dom";
 import { isSearchActive, routePathname } from "@/hiding/routes";
@@ -34,8 +35,6 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
   let prevSig = hiddenSignature();
   const pathname = routePathname;
   const offDom = initHideAlbumDom();
-
-  const scope = () => document.querySelector("main") ?? document.body;
 
   const patchDiscographyList = () => {
     if (!usesDiscographyVirtualList()) return;
@@ -78,7 +77,7 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
       restoreAllDomHiding();
       return;
     }
-    applyHideAlbumDom(scope(), pathname(), hiddenAlbumIdSet());
+    applyHideAlbumDom(mainDomRoot(), pathname(), hiddenAlbumIdSet());
   };
 
   const sync = () => {
