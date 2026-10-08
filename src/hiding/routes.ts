@@ -1,36 +1,18 @@
-import { isSearchRoute, XpuiDom } from "@/hiding/re";
+import { isSearchRoute } from "@/hiding/re";
 
 export function routePathname(): string {
-  try {
-    const sp = (
-      globalThis as typeof globalThis & {
-        Spicetify?: { Platform?: { History?: { location?: { pathname?: string } } } };
-      }
-    ).Spicetify;
-    const fromSp = sp?.Platform?.History?.location?.pathname;
-    if (fromSp) return fromSp;
-    return globalThis.location?.pathname ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function isSearchPath(pathname: string): boolean {
-  return isSearchRoute(pathname);
-}
-
-function searchInputElement(): HTMLInputElement | null {
-  const el = document.querySelector(XpuiDom.searchInput);
-  return el instanceof HTMLInputElement ? el : null;
+  const sp = (
+    globalThis as typeof globalThis & {
+      Spicetify?: { Platform?: { History?: { location?: { pathname?: string } } } };
+    }
+  ).Spicetify;
+  const fromSp = sp?.Platform?.History?.location?.pathname;
+  if (fromSp) return fromSp;
+  return globalThis.location?.pathname ?? "";
 }
 
 export function isSearchActive(): boolean {
-  const path = routePathname();
-  if (isSearchPath(path)) return true;
-  if (document.querySelector(XpuiDom.searchResults)) return true;
-  const input = searchInputElement();
-  if (input && document.activeElement === input) return true;
-  return false;
+  return isSearchRoute(routePathname());
 }
 
 export function domHideSelector(): string {
