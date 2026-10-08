@@ -44,32 +44,35 @@ type PatchTarget = {
 };
 
 const patched = new WeakSet<object>();
+const JSX_CACHE_KEY = "jsx-runtime-Fragment-jsx-jsxs";
 
 export function installDiscographyActionBarJsxPatch(
   sp: typeof Spicetify,
 ): () => void {
-  const req = getWebpackRequire();
-  const webpackReact = (() => {
-    if (!req) return null;
-    try {
-      return req("10006") as ReactLike;
-    } catch {
-      return null;
-    }
-  })();
-  const spicetifyReact = (sp as typeof Spicetify & { React?: ReactLike }).React;
-  const react = webpackReact ?? spicetifyReact;
+  const react = sp.React as ReactLike | undefined;
   if (
-    !react?.createElement ||
-    !react.useSyncExternalStore ||
-    !react.useRef
+    typeof react?.createElement !== "function" ||
+    typeof react.useSyncExternalStore !== "function" ||
+    typeof react.useRef !== "function"
   ) {
     return () => undefined;
   }
 
-  const HideButton = createHideButtonComponent(sp, react);
-  const restorers: Array<() => void> = [];
+  const req = getWebpackRequire();
+  if (!req) return () => undefined;
 
+  const jsxId = findModuleIdByExportBody(
+    (source) => source.includes(JSX_RUNTIME_NEEDLE),
+    JSX_CACHE_KEY,
+  );
+  if (!jsxId) return () => undefined;
+
+  const mod = req(jsxId) as PatchTarget;
+  if (typeof mod.jsx !== "function" || typeof mod.jsxs !== "function") {
+    return () => undefined;
+  }
+
+  const HideButton = createHideButtonComponent(sp, react);
   const wrap = (original: JsxFn): JsxFn => {
     const wrapped: JsxFn = (type, props, key) => {
       const nextProps = maybeInjectHide(react, HideButton, type, props);
@@ -78,22 +81,8 @@ export function installDiscographyActionBarJsxPatch(
     return wrapped;
   };
 
-  if (req) {
-    const jsxId =
-      findModuleIdByExportBody((source) => source.includes(JSX_RUNTIME_NEEDLE)) ??
-      "22726";
-    try {
-      const mod = req(jsxId) as PatchTarget;
-      restorers.push(patchJsxFns(mod, wrap));
-    } catch {}
-    restorers.push(patchJsxFns(react as PatchTarget, wrap));
-  } else {
-    restorers.push(patchJsxFns(react as PatchTarget, wrap));
-  }
-
-  return () => {
-    for (const restore of restorers) restore();
-  };
+  const restore = patchJsxFns(mod, wrap);
+  return restore;
 }
 
 function patchJsxFns(
@@ -130,12 +119,11 @@ function maybeInjectHide(
   const albumId = albumIdFromActionBarChildren(rec.children);
   if (!albumId) return props;
   if (childrenHaveHide(rec.children, albumId)) return props;
-  const title = titleFromActionBarChildren(rec.children) || "Untitled album";
   const hideEl = react.createElement(HideButton, {
     key: HIDE_KEY,
     [HIDE_PROP]: albumId,
     albumId,
-    title,
+    title: titleFromActionBarChildren(rec.children) ?? albumId,
   });
   const children = Array.isArray(rec.children)
     ? [...rec.children, hideEl]
@@ -255,10 +243,13 @@ function titleFromActionBarChildren(children: unknown): string | null {
   let found: string | null = null;
   visitElements(children, (props) => {
     if (found) return;
-    const label = props.label;
-    if (typeof label !== "string") return;
-    const m = label.match(/^More options for\s+(.+)$/i);
-    if (m?.[1]) found = m[1].trim();
+    for (const key of ["entityName", "albumName", "name", "title"] as const) {
+      const value = props[key];
+      if (typeof value === "string" && value.trim()) {
+        found = value.trim();
+        return;
+      }
+    }
   });
   return found;
 }
