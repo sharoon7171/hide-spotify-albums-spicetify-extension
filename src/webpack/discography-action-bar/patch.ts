@@ -119,11 +119,12 @@ function maybeInjectHide(
   const albumId = albumIdFromActionBarChildren(rec.children);
   if (!albumId) return props;
   if (childrenHaveHide(rec.children, albumId)) return props;
+  const title = titleFromActionBarChildren(rec.children) || "Untitled album";
   const hideEl = react.createElement(HideButton, {
     key: HIDE_KEY,
     [HIDE_PROP]: albumId,
     albumId,
-    title: titleFromActionBarChildren(rec.children) ?? albumId,
+    title,
   });
   const children = Array.isArray(rec.children)
     ? [...rec.children, hideEl]
@@ -243,13 +244,10 @@ function titleFromActionBarChildren(children: unknown): string | null {
   let found: string | null = null;
   visitElements(children, (props) => {
     if (found) return;
-    for (const key of ["entityName", "albumName", "name", "title"] as const) {
-      const value = props[key];
-      if (typeof value === "string" && value.trim()) {
-        found = value.trim();
-        return;
-      }
-    }
+    const label = props.label;
+    if (typeof label !== "string") return;
+    const m = label.match(/^More options for\s+(.+)$/i);
+    if (m?.[1]) found = m[1].trim();
   });
   return found;
 }
