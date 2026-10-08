@@ -1,1 +1,1 @@
-export const VIRTUAL_LIST_MODULE = "51175" as const;
+export const VIRTUAL_LIST_NEEDLE = /itemIsValidPredicate:\w+=\(\)=>!0/;

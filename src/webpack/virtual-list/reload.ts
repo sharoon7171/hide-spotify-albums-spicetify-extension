@@ -1,46 +1,22 @@
-import { getWebpackChunk } from "@/webpack/chunk";
-import {
-  evictWebpackModule,
-  findWebpackModuleCache,
-} from "@/webpack/module-cache";
 import { isDiscographyPath } from "@/hiding/discography";
 import { routePathname } from "@/hiding/routes";
-import { VIRTUAL_LIST_MODULE } from "@/hiding/virtual-list";
+import { VIRTUAL_LIST_NEEDLE } from "@/hiding/virtual-list";
 import {
   createVirtualListPatch,
-  matchesVirtualListNeedle,
   type VirtualListPatchContext,
 } from "@/webpack/virtual-list/patch";
 import { findModuleIdByExportBody } from "@/webpack/require";
 import type { WebpackRequire } from "@/webpack/require";
 
-function resolveVirtualListModuleId(): string {
-  return (
-    findModuleIdByExportBody((source) => matchesVirtualListNeedle(source)) ??
-    VIRTUAL_LIST_MODULE
-  );
-}
+const NEEDLE_CACHE_KEY = "virtual-list-itemIsValidPredicate";
 
 let virtualListExportPatched = false;
-let evictAttempted = false;
 
-function evictVirtualListFromKnownCaches(moduleId: string): void {
-  const roots: unknown[] = [globalThis];
-  const chunk = getWebpackChunk();
-  if (Array.isArray(chunk)) {
-    roots.push(chunk);
-    for (const entry of chunk) {
-      if (!Array.isArray(entry) || typeof entry[2] !== "function") continue;
-      try {
-        const req = entry[2]({});
-        if (req && typeof req === "object") roots.push(req);
-      } catch {}
-    }
-  }
-  for (const root of roots) {
-    const cache = findWebpackModuleCache(root, moduleId);
-    if (cache) evictWebpackModule(cache, moduleId);
-  }
+function resolveVirtualListModuleId(): string | null {
+  return findModuleIdByExportBody(
+    (source) => VIRTUAL_LIST_NEEDLE.test(source),
+    NEEDLE_CACHE_KEY,
+  );
 }
 
 export function applyVirtualListAlbumPatch(
@@ -50,24 +26,12 @@ export function applyVirtualListAlbumPatch(
   if (!isDiscographyPath(routePathname())) return virtualListExportPatched;
   if (virtualListExportPatched) return true;
 
-  const patch = createVirtualListPatch(patchCtx);
   const moduleId = resolveVirtualListModuleId();
+  if (!moduleId) return false;
 
+  const patch = createVirtualListPatch(patchCtx);
   patch.patchFactoryMap(req.m);
-  if (patch.patchModuleExport(req, moduleId)) {
-    virtualListExportPatched = true;
-    return true;
-  }
-
-  if (!evictAttempted) {
-    evictAttempted = true;
-    evictVirtualListFromKnownCaches(moduleId);
-    try {
-      if (patch.patchModuleExport(req, moduleId)) {
-        virtualListExportPatched = true;
-        return true;
-      }
-    } catch {}
-  }
-  return false;
+  if (!patch.patchModuleExport(req, moduleId)) return false;
+  virtualListExportPatched = true;
+  return true;
 }

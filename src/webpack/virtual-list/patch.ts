@@ -1,10 +1,9 @@
 import { isDiscographyPath } from "@/hiding/discography";
 import { routePathname } from "@/hiding/routes";
-import { VIRTUAL_LIST_MODULE } from "@/hiding/virtual-list";
+import { VIRTUAL_LIST_NEEDLE } from "@/hiding/virtual-list";
 import type { WebpackRequire } from "@/webpack/require";
 
-export const VIRTUAL_LIST_NEEDLE_PATTERN =
-  /itemIsValidPredicate:\w+=\(\)=>!0/;
+export const VIRTUAL_LIST_NEEDLE_PATTERN = VIRTUAL_LIST_NEEDLE;
 
 const scannedFactories = new WeakSet<object>();
 
@@ -46,25 +45,20 @@ function isVirtualListFactory(factory: unknown): factory is WebpackFactory {
   return match;
 }
 
-function shouldFilterAlbumsAtPath(path: string): boolean {
-  return isDiscographyPath(path);
-}
-
 export function createVirtualListPatch(ctx: VirtualListPatchContext) {
   function wrapHook(original: VirtualListHook): VirtualListHook {
     const wrapped: VirtualListHook = (props) => {
       if (Object.prototype.hasOwnProperty.call(props, "initialItems")) {
         return original(props);
       }
-      const path = routePathname();
-      if (!shouldFilterAlbumsAtPath(path)) {
+      if (!isDiscographyPath(routePathname())) {
         return original(props);
       }
-      const userPred = props.itemIsValidPredicate ?? (() => true);
+      const userPred = props.itemIsValidPredicate;
       return original({
         ...props,
         itemIsValidPredicate: (value: unknown) => {
-          if (!userPred(value)) return false;
+          if (userPred && !userPred(value)) return false;
           const uri =
             value && typeof value === "object"
               ? (value as { uri?: string }).uri
@@ -114,34 +108,23 @@ export function createVirtualListPatch(ctx: VirtualListPatchContext) {
   }
 
   function assignExportE(mod: Record<string, unknown>, hook: VirtualListHook): void {
-    try {
-      Object.defineProperty(mod, "E", {
-        value: hook,
-        writable: true,
-        configurable: true,
-        enumerable: true,
-      });
-    } catch {
-      mod.E = hook;
-    }
+    Object.defineProperty(mod, "E", {
+      value: hook,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
   }
 
-  function patchModuleExport(
-    req: WebpackRequire,
-    moduleId: string = VIRTUAL_LIST_MODULE,
-  ): boolean {
+  function patchModuleExport(req: WebpackRequire, moduleId: string): boolean {
     if (!isDiscographyPath(routePathname())) return false;
-    try {
-      const mod = req(moduleId);
-      const hook = mod.E;
-      if (typeof hook !== "function") return false;
-      if (isVirtualListExportHook(hook)) return true;
-      if (!matchesVirtualListNeedle(hook.toString())) return false;
-      assignExportE(mod, wrapHook(hook as VirtualListHook));
-      return isVirtualListExportHook(mod.E);
-    } catch {
-      return false;
-    }
+    const mod = req(moduleId);
+    const hook = mod.E;
+    if (typeof hook !== "function") return false;
+    if (isVirtualListExportHook(hook)) return true;
+    if (!matchesVirtualListNeedle(hook.toString())) return false;
+    assignExportE(mod, wrapHook(hook as VirtualListHook));
+    return isVirtualListExportHook(mod.E);
   }
 
   return {
