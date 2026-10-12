@@ -36,13 +36,11 @@ export function findModuleIdByExportBody(
 ): string | null {
   const key =
     cacheKey ?? (typeof match === "string" ? match : match.toString());
-  if (moduleIdCache.has(key)) return moduleIdCache.get(key) ?? null;
+  const cached = moduleIdCache.get(key);
+  if (cached) return cached;
 
   const req = getWebpackRequire();
-  if (!req) {
-    moduleIdCache.set(key, null);
-    return null;
-  }
+  if (!req) return null;
   const test =
     typeof match === "function"
       ? match
@@ -54,6 +52,5 @@ export function findModuleIdByExportBody(
       return id;
     }
   }
-  moduleIdCache.set(key, null);
   return null;
 }
