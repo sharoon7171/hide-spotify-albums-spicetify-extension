@@ -1,10 +1,10 @@
 # Hide Albums in Spicetify
 
-Spicetify extension for the Spotify desktop client. It hides albums on Home, Artist, Artist Discography, Search, and carousels while album pages stay open. On album pages and Artist Discography list track rows it also adds Spotify’s native **Hide in This Album** / **Show in This Album** control next to each track title (always visible, no context menu), using the same account sync path as the desktop right-click action.
+Spicetify extension for the Spotify desktop client. It hides or excludes albums on Home, Artist, Artist Discography, Search, and carousels while album pages stay open. On album pages and Artist Discography list track rows it also adds Spotify’s native **Hide in This Album** / **Show in This Album** control next to each track title (always visible, no context menu), using the same account sync path as the desktop right-click action.
 
-Pair album hiding with [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) by pointing both at the **same Firebase project** and signing in with the **same account**. Track hide/show syncs through your Spotify account, not Firebase.
+Pair album lists with [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) by pointing both at the **same Firebase project** and signing in with the **same account**. Track hide/show syncs through your Spotify account, not Firebase.
 
-Build and apply this package locally. There is no hosted backend for album hiding—you use **your** Firebase project and create Auth users yourself.
+Build and apply this package locally. There is no hosted backend for album lists—you use **your** Firebase project and create Auth users yourself.
 
 ## What Spicetify Is
 
@@ -76,9 +76,18 @@ Marketplace is optional. This extension is applied from source with `npm run app
 1. Apply the extension with Spicetify and open the Spotify desktop app
 2. Open **Hide Albums in Spicetify** from the global nav (next to Home / Search)
 3. Sign in with an email and password you created in Firebase Authentication
-4. Choose **Hide** on an album page action bar, or on **Artist Discography** in list mode (one control per release, next to More)
-5. With **Hide in Grids** on, that album leaves Home, Artist, Artist Discography (grid and list), Search, and carousels
-6. Unhide from the album page, the discography list control, or the manager panel
+4. Choose **Hide** or **Exclude** on an album page action bar, or on **Artist Discography** in list mode (controls per release, next to More)
+5. With **Hidden in Grids** / **Excluded in Grids** on, albums on those lists leave Home, Artist, Artist Discography (grid and list), Search, and carousels
+6. Unhide / include from the album page, the discography list controls, or the manager panel
+
+### Hide vs Exclude
+
+| Action | Purpose | Firestore collection |
+| --- | --- | --- |
+| **Hide** | Temporarily out of grids; restore later with Unhide | `users/{uid}/hiddenAlbums/{albumId}` |
+| **Exclude** | Longer-term removal from grids; restore with Include | `users/{uid}/excludedAlbums/{albumId}` |
+
+An album belongs to at most one list. Moving it to the other list removes it from the first.
 
 ### Hide Songs on Album and Discography Lists
 
@@ -92,10 +101,11 @@ No right-click menu required. The action is Spotify’s native contextual ban (`
 ### Manager Panel
 
 - **Sign in / Sign out** — accounts that already exist in your Firebase project only
-- **Hide in Grids** — local on/off for grid hiding; does not delete albums
-- **Hidden list** — search, open, remove one, or **Clear All**
+- **Hidden in Grids** — local on/off for applying the Hidden list to grids; does not delete albums
+- **Excluded in Grids** — local on/off for applying the Excluded list to grids; does not delete albums
+- **Hidden / Excluded** — two lists; search, open, remove one, or **Clear All** for the active list
 
-Clear All deletes every album doc for that signed-in user in your Firestore project, so Chrome and other clients on the same account update too.
+Clear All deletes every album doc in the active list for that signed-in user in your Firestore project, so Chrome and other clients on the same account update too.
 
 ## Setup
 
@@ -129,7 +139,7 @@ Copy `.env.example` to `.env` and fill in values from **your** Firebase web app 
 
 ### Firestore Rules
 
-Deploy [`firestore.rules`](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension/blob/main/firestore.rules) from [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) to that Firebase project. Rules allow each signed-in user to read and write only `users/{uid}/savedAlbums/{albumId}`.
+Deploy [`firestore.rules`](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension/blob/main/firestore.rules) from [Hide Albums in Spotify](https://github.com/sharoon7171/hide-spotify-albums-chrome-extension) to that Firebase project. Rules allow each signed-in user to read and write only `users/{uid}/hiddenAlbums/{albumId}` and `users/{uid}/excludedAlbums/{albumId}`.
 
 ### Build and Apply
 
@@ -150,11 +160,12 @@ Or step by step:
 | Layer | What it holds |
 | --- | --- |
 | Firebase Auth (IndexedDB) | Local session restore via `authStateReady` — needed only to know `uid` (not a network re-login) |
-| Firestore `users/{uid}/savedAlbums/{albumId}` | Server copy of each hidden album (`updatedAt`, optional `title` / `url`) |
+| Firestore `users/{uid}/hiddenAlbums/{albumId}` | Hidden albums (`updatedAt`, optional `title` / `url`) |
+| Firestore `users/{uid}/excludedAlbums/{albumId}` | Excluded albums (`updatedAt`, optional `title` / `url`) |
 | Firestore persistent cache (`CACHE_SIZE_UNLIMITED`) | Official offline IndexedDB cache ([Enable offline](https://firebase.google.com/docs/firestore/manage-data/enable-offline)); albums are read with `getDocsFromCache` **before** the manager UI paints signed-in state |
-| `localStorage` | **Hide in Grids** only (device-local, not synced) |
+| `localStorage` | **Hidden in Grids** / **Excluded in Grids** only (device-local, not synced) |
 
-Album docs live under `users/{uid}/…`, so Auth must settle locally first to get `uid`, then the persistent cache supplies the list offline. The manager waits on that hydrate, then shows account + table together — it does not wait on a server round-trip when the cache is already seeded.
+Album docs live under `users/{uid}/…`, so Auth must settle locally first to get `uid`, then the persistent cache supplies both lists offline. The manager waits on that hydrate, then shows account + table together — it does not wait on a server round-trip when the cache is already seeded.
 
 ## Project Layout
 
@@ -162,11 +173,11 @@ Album docs live under `users/{uid}/…`, so Auth must settle locally first to ge
 | --- | --- |
 | `src/index.ts` | Extension entry after Spicetify is ready |
 | `src/core` | Shared page sync (history + DOM) for album and discography UI |
-| `src/albums` | Store, album IDs, live hidden-ID set on `globalThis` (shared by bootstrap + main) |
+| `src/albums` | Store, album IDs, live filtered-ID set on `globalThis` (shared by bootstrap + main) |
 | `src/lib/firebase` | App, Auth, Firestore album CRUD and listeners |
-| `src/features` | Manager panel, album / discography list hide toggles, album track title hide, DOM apply |
-| `src/hiding` | Route-aware DOM hiding; discography list/grid use the virtual-list patch instead |
-| `src/ui` | Nav mount, album anchors, hide button host |
+| `src/features` | Manager panel, album / discography list controls, album track title hide, DOM apply |
+| `src/hiding` | Route-aware DOM filtering; discography list/grid use the virtual-list patch instead |
+| `src/ui` | Nav mount, album anchors, hide/exclude button host |
 | `src/webpack` | Early bootstrap / post-snapshot ODP hooks; discography virtual-list + list action-bar jsx patches; album tracklist title-hide factory patch. Webpack require comes from Spotify’s chunk global (`rspackChunk`, then legacy `webpackChunkclient_web` fallbacks)—same order as Spicetify’s wrapper |
 | `scripts/install.sh` | Copy builds into Spicetify and apply |
 
