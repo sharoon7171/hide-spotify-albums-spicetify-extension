@@ -25,11 +25,6 @@ export function watchAuth(cb: (user: User | null) => void): () => void {
   return onAuthStateChanged(firebaseAuth(), cb);
 }
 
-export async function currentUserReady(): Promise<User | null> {
-  await firebaseAuthReady();
-  return firebaseAuth().currentUser;
-}
-
 export async function signInWithEmail(
   email: string,
   password: string,

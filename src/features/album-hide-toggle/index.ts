@@ -1,5 +1,5 @@
 import { bindPageSync } from "@/core/page-sync";
-import { subscribeHiddenAlbums } from "@/albums/store";
+import { subscribeAlbumLists } from "@/albums/store";
 import { albumIdFromPathname } from "@/albums/urls";
 import {
   currentPathname,
@@ -16,7 +16,7 @@ import {
 const HOST_ID = "spicetify-ext-album-hide-host";
 
 export function initAlbumHideToggle(sp: typeof Spicetify): () => void {
-  const offStore = subscribeHiddenAlbums(() => {
+  const offStore = subscribeAlbumLists(() => {
     const host = document.getElementById(HOST_ID) as HideAlbumToggleHost | null;
     if (host) delete host.dataset.extToggleSig;
     refreshHideToggle(sp);
@@ -61,7 +61,9 @@ function ensureHideToggle(sp: typeof Spicetify, albumId: string): void {
     return;
   }
 
-  if (anchor.insertAfter.nextElementSibling !== host) {
+  if (anchor.insertAfter === anchor.bar) {
+    if (host.parentElement !== anchor.bar) anchor.bar.appendChild(host);
+  } else if (anchor.insertAfter.nextElementSibling !== host) {
     anchor.insertAfter.insertAdjacentElement("afterend", host);
   }
   paintHideAlbumToggle(host, albumId);

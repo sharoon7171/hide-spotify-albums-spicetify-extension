@@ -1,4 +1,4 @@
-import { hiddenAlbumIdSet, subscribeHiddenAlbums } from "@/albums/store";
+import { filteredAlbumIdSet, subscribeAlbumLists } from "@/albums/store";
 import {
   applyHideAlbumDom,
   disarmDomObserver,
@@ -23,16 +23,16 @@ import { applyVirtualListAlbumPatch } from "@/webpack/virtual-list/reload";
 const ALBUM_URI = /^spotify:album:([0-9A-Za-z]+)$/;
 
 const patchCtx = {
-  hiddenIds: hiddenAlbumIdSet,
+  hiddenIds: filteredAlbumIdSet,
   albumUriRe: ALBUM_URI,
 };
 
-function hiddenSignature(): string {
-  return [...hiddenAlbumIdSet()].sort().join("\0");
+function filteredSignature(): string {
+  return [...filteredAlbumIdSet()].sort().join("\0");
 }
 
 export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
-  let prevSig = hiddenSignature();
+  let prevSig = filteredSignature();
   const pathname = routePathname;
   const offDom = initHideAlbumDom();
 
@@ -67,8 +67,8 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
       disarmSearchDomObserver();
       return;
     }
-    applySearchAlbumDomHide(hiddenAlbumIdSet());
-    armSearchDomObserver(hiddenAlbumIdSet);
+    applySearchAlbumDomHide(filteredAlbumIdSet());
+    armSearchDomObserver(filteredAlbumIdSet);
   };
 
   const applyDom = () => {
@@ -77,7 +77,7 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
       restoreAllDomHiding();
       return;
     }
-    applyHideAlbumDom(mainDomRoot(), pathname(), hiddenAlbumIdSet());
+    applyHideAlbumDom(mainDomRoot(), pathname(), filteredAlbumIdSet());
   };
 
   const sync = () => {
@@ -88,8 +88,8 @@ export function initHiddenAlbumsApply(sp: typeof Spicetify): () => void {
 
   sync();
 
-  const offStore = subscribeHiddenAlbums(() => {
-    const next = hiddenSignature();
+  const offStore = subscribeAlbumLists(() => {
+    const next = filteredSignature();
     if (next === prevSig) return;
     prevSig = next;
     sync();

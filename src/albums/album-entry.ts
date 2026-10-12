@@ -1,18 +1,20 @@
 import { albumIdFromHref } from "@/albums/urls";
 
-export type SavedAlbum = {
+export type AlbumListKind = "hidden" | "excluded";
+
+export type AlbumEntry = {
   updatedAt: number;
   url?: string;
   title?: string;
 };
 
-export function albumIdFromSavedAlbum(a: SavedAlbum): string | null {
+export function albumIdFromEntry(a: AlbumEntry): string | null {
   if (!a.url) return null;
   return albumIdFromHref(a.url);
 }
 
-export function docIdForSavedAlbum(a: SavedAlbum): string {
-  const id = albumIdFromSavedAlbum(a);
+export function docIdForAlbumEntry(a: AlbumEntry): string {
+  const id = albumIdFromEntry(a);
   if (id) return id;
   const title = (a.title ?? "").trim();
   return `t-${encodeBase36(title)}`;

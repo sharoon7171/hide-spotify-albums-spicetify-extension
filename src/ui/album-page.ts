@@ -29,9 +29,13 @@ export function resolveAlbumActionAnchor(): AlbumActionAnchor | null {
     `[data-testid="${XpuiTestId.actionBarRow}"]`,
   );
   if (!bar) return null;
-  const more = bar.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
-  if (!more || !isVisible(more)) return null;
-  return { bar, insertAfter: more };
+  const more =
+    bar.querySelector<HTMLElement>('[data-testid="more-button"]') ??
+    bar.querySelector<HTMLElement>('button[aria-haspopup="menu"]');
+  if (more && isVisible(more)) return { bar, insertAfter: more };
+  const last = bar.lastElementChild;
+  if (last instanceof HTMLElement) return { bar, insertAfter: last };
+  return { bar, insertAfter: bar };
 }
 
 function isVisible(el: HTMLElement): boolean {

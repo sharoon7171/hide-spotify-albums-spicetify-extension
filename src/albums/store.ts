@@ -1,9 +1,10 @@
 import {
-  albumIdFromSavedAlbum,
-  docIdForSavedAlbum,
-  type SavedAlbum,
-} from "@/albums/saved-album";
-import { setLiveHiddenAlbumIds } from "@/albums/early-ids";
+  albumIdFromEntry,
+  docIdForAlbumEntry,
+  type AlbumEntry,
+  type AlbumListKind,
+} from "@/albums/album-entry";
+import { setLiveFilteredAlbumIds } from "@/albums/early-ids";
 import {
   clearAllAlbums,
   loadAlbumsFromCache,
@@ -12,38 +13,56 @@ import {
   upsertAlbum,
 } from "@/lib/firebase/firestore-data";
 import {
-  currentUserReady,
   signInWithEmail,
   signOutCurrent,
   userView,
   watchAuth,
   type FirebaseUserView,
 } from "@/lib/firebase/auth";
-import { firebaseAuthReady, firestoreDb } from "@/lib/firebase/app";
+import { firebaseAuth, firebaseAuthReady, firestoreDb } from "@/lib/firebase/app";
+import type { User } from "firebase/auth";
 
-type AlbumListener = (albums: Record<string, SavedAlbum>) => void;
+type AlbumListListener = () => void;
 type AuthListener = (user: FirebaseUserView | null) => void;
-type HideTilesListener = (enabled: boolean) => void;
+type GridFiltersListener = (filters: GridFilters) => void;
 
-const HIDE_TILES_KEY = "hide-albums-hide-tiles";
+export type GridFilters = {
+  hidden: boolean;
+  excluded: boolean;
+};
 
-let albums: Record<string, SavedAlbum> = {};
-let hiddenIdCache: Set<string> | null = null;
-let hideTilesEnabled = readLocalHideTiles();
+const FILTER_HIDDEN_KEY = "hide-albums-filter-hidden";
+const FILTER_EXCLUDED_KEY = "hide-albums-filter-excluded";
+const OTHER: Record<AlbumListKind, AlbumListKind> = {
+  hidden: "excluded",
+  excluded: "hidden",
+};
+
+let hiddenAlbums: Record<string, AlbumEntry> = {};
+let excludedAlbums: Record<string, AlbumEntry> = {};
+let filteredIdCache: Set<string> | null = null;
+let gridFilters: GridFilters = readLocalGridFilters();
 let uid: string | null = null;
 let started = false;
 let syncEpoch = 0;
+let authUiReady = false;
+let authUser: FirebaseUserView | null = null;
 
-const albumListeners = new Set<AlbumListener>();
+const albumListeners = new Set<AlbumListListener>();
 const authListeners = new Set<AuthListener>();
-const hideTilesListeners = new Set<HideTilesListener>();
+const gridFilterListeners = new Set<GridFiltersListener>();
 
-let unsubAlbums: (() => void) | null = null;
+let unsubHidden: (() => void) | null = null;
+let unsubExcluded: (() => void) | null = null;
 let unsubAuth: (() => void) | null = null;
 
-function readLocalHideTiles(): boolean {
+function storageKeyForList(list: AlbumListKind): string {
+  return list === "hidden" ? FILTER_HIDDEN_KEY : FILTER_EXCLUDED_KEY;
+}
+
+function readLocalFlag(key: string): boolean {
   try {
-    const v = localStorage.getItem(HIDE_TILES_KEY);
+    const v = localStorage.getItem(key);
     if (v === null) return true;
     return v !== "0";
   } catch {
@@ -51,103 +70,175 @@ function readLocalHideTiles(): boolean {
   }
 }
 
-function writeLocalHideTiles(value: boolean): void {
+function readLocalGridFilters(): GridFilters {
+  return {
+    hidden: readLocalFlag(FILTER_HIDDEN_KEY),
+    excluded: readLocalFlag(FILTER_EXCLUDED_KEY),
+  };
+}
+
+function writeLocalGridFilter(list: AlbumListKind, value: boolean): void {
   try {
-    localStorage.setItem(HIDE_TILES_KEY, value ? "1" : "0");
+    localStorage.setItem(storageKeyForList(list), value ? "1" : "0");
   } catch {
     void 0;
   }
 }
 
-function rebuildHiddenIdCache(): Set<string> {
+function listMap(list: AlbumListKind): Record<string, AlbumEntry> {
+  return list === "hidden" ? hiddenAlbums : excludedAlbums;
+}
+
+function setListMap(
+  list: AlbumListKind,
+  next: Record<string, AlbumEntry>,
+): void {
+  if (list === "hidden") hiddenAlbums = next;
+  else excludedAlbums = next;
+}
+
+function rebuildFilteredIdCache(): Set<string> {
   const out = new Set<string>();
-  if (uid && hideTilesEnabled) {
-    for (const row of Object.values(albums)) {
-      const id = albumIdFromSavedAlbum(row);
-      if (id) out.add(id);
+  if (uid) {
+    if (gridFilters.hidden) {
+      for (const row of Object.values(hiddenAlbums)) {
+        const id = albumIdFromEntry(row);
+        if (id) out.add(id);
+      }
+    }
+    if (gridFilters.excluded) {
+      for (const row of Object.values(excludedAlbums)) {
+        const id = albumIdFromEntry(row);
+        if (id) out.add(id);
+      }
     }
   }
-  hiddenIdCache = out;
-  setLiveHiddenAlbumIds(out);
+  filteredIdCache = out;
+  setLiveFilteredAlbumIds(out);
   return out;
 }
 
 function emitAlbums(): void {
-  hiddenIdCache = null;
-  rebuildHiddenIdCache();
-  const snap = { ...albums };
-  for (const fn of albumListeners) fn(snap);
+  filteredIdCache = null;
+  rebuildFilteredIdCache();
+  for (const fn of albumListeners) fn();
 }
 
 function emitAuth(user: FirebaseUserView | null): void {
+  authUiReady = true;
+  authUser = user;
   for (const fn of authListeners) fn(user);
 }
 
-function emitHideTiles(): void {
-  for (const fn of hideTilesListeners) fn(hideTilesEnabled);
+function emitGridFilters(): void {
+  const snap = { ...gridFilters };
+  for (const fn of gridFilterListeners) fn(snap);
   emitAlbums();
 }
 
-function applyAlbums(next: Record<string, SavedAlbum>): void {
-  albums = next;
+function applyList(list: AlbumListKind, next: Record<string, AlbumEntry>): void {
+  setListMap(list, next);
   emitAlbums();
 }
 
 function detachAlbumListeners(): void {
-  unsubAlbums?.();
-  unsubAlbums = null;
+  unsubHidden?.();
+  unsubHidden = null;
+  unsubExcluded?.();
+  unsubExcluded = null;
 }
 
-async function attachAlbumListeners(userId: string): Promise<void> {
+async function attachAlbumListeners(
+  userId: string,
+  epoch: number,
+): Promise<void> {
   detachAlbumListeners();
-  const epoch = ++syncEpoch;
-  const cached = await loadAlbumsFromCache(userId);
+  const [cachedHidden, cachedExcluded] = await Promise.all([
+    loadAlbumsFromCache(userId, "hidden"),
+    loadAlbumsFromCache(userId, "excluded"),
+  ]);
   if (epoch !== syncEpoch || uid !== userId) return;
-  applyAlbums(cached ?? {});
-  unsubAlbums = subscribeAlbums(
+  hiddenAlbums = cachedHidden ?? {};
+  excludedAlbums = cachedExcluded ?? {};
+  emitAlbums();
+  unsubHidden = subscribeAlbums(
     userId,
+    "hidden",
     (next) => {
       if (epoch !== syncEpoch || uid !== userId) return;
-      applyAlbums(next);
+      applyList("hidden", next);
+    },
+    () => undefined,
+  );
+  unsubExcluded = subscribeAlbums(
+    userId,
+    "excluded",
+    (next) => {
+      if (epoch !== syncEpoch || uid !== userId) return;
+      applyList("excluded", next);
     },
     () => undefined,
   );
 }
 
-export function hiddenAlbumIdSet(): Set<string> {
-  if (hiddenIdCache) return hiddenIdCache;
-  return rebuildHiddenIdCache();
+function applyAuthUser(user: User | null): void {
+  const epoch = ++syncEpoch;
+  const view = userView(user);
+  if (!view) {
+    detachAlbumListeners();
+    uid = null;
+    hiddenAlbums = {};
+    excludedAlbums = {};
+    emitAlbums();
+    if (epoch === syncEpoch) emitAuth(null);
+    return;
+  }
+  uid = view.uid;
+  if (epoch === syncEpoch) emitAuth(view);
+  void attachAlbumListeners(view.uid, epoch);
 }
 
-export function subscribeHiddenAlbums(fn: AlbumListener): () => void {
+export function filteredAlbumIdSet(): Set<string> {
+  if (filteredIdCache) return filteredIdCache;
+  return rebuildFilteredIdCache();
+}
+
+export function subscribeAlbumLists(fn: AlbumListListener): () => void {
   albumListeners.add(fn);
-  fn({ ...albums });
+  fn();
   return () => albumListeners.delete(fn);
 }
 
 export function subscribeAuth(fn: AuthListener): () => void {
   authListeners.add(fn);
-  void currentUserReady().then((u) => fn(userView(u)));
+  if (authUiReady) fn(authUser);
   return () => authListeners.delete(fn);
 }
 
-export function subscribeHideTilesSetting(fn: HideTilesListener): () => void {
-  hideTilesListeners.add(fn);
-  fn(hideTilesEnabled);
-  return () => hideTilesListeners.delete(fn);
+export function subscribeGridFilters(fn: GridFiltersListener): () => void {
+  gridFilterListeners.add(fn);
+  fn({ ...gridFilters });
+  return () => gridFilterListeners.delete(fn);
 }
 
-export function getHideTilesEnabled(): boolean {
-  return hideTilesEnabled;
+export function getGridFilters(): GridFilters {
+  return { ...gridFilters };
 }
 
 export function isAlbumHidden(albumId: string): boolean {
-  return findDocIdForAlbumId(albumId) !== null;
+  return findDocIdForAlbumId("hidden", albumId) !== null;
 }
 
-function findDocIdForAlbumId(albumId: string): string | null {
-  for (const [docId, a] of Object.entries(albums)) {
-    if (albumIdFromSavedAlbum(a) === albumId) return docId;
+export function isAlbumExcluded(albumId: string): boolean {
+  return findDocIdForAlbumId("excluded", albumId) !== null;
+}
+
+function findDocIdForAlbumId(
+  list: AlbumListKind,
+  albumId: string,
+): string | null {
+  for (const [docId, a] of Object.entries(listMap(list))) {
+    if (albumIdFromEntry(a) === albumId) return docId;
   }
   return null;
 }
@@ -161,70 +252,104 @@ function requireUid(): string {
   return uid;
 }
 
-export async function hideAlbum(entry: SavedAlbum): Promise<void> {
+async function upsertAlbumExclusive(
+  list: AlbumListKind,
+  entry: AlbumEntry,
+): Promise<void> {
   const userId = requireUid();
-  const id = docIdForSavedAlbum(entry);
+  const id = docIdForAlbumEntry(entry);
   const now = Date.now();
-  const row: SavedAlbum = {
-    ...entry,
-    updatedAt: now,
-  };
-  const prev = albums[id];
-  applyAlbums({ ...albums, [id]: row });
+  const row: AlbumEntry = { ...entry, updatedAt: now };
+  const other = OTHER[list];
+  const prev = listMap(list)[id];
+  const prevOther = listMap(other)[id];
+
+  setListMap(list, { ...listMap(list), [id]: row });
+  if (prevOther) {
+    const nextOther = { ...listMap(other) };
+    delete nextOther[id];
+    setListMap(other, nextOther);
+  }
+  emitAlbums();
+
   try {
-    await upsertAlbum(userId, row);
+    await upsertAlbum(userId, list, row);
+    if (prevOther) await removeAlbum(userId, other, id);
   } catch (e) {
-    if (prev) applyAlbums({ ...albums, [id]: prev });
-    else {
-      const next = { ...albums };
-      delete next[id];
-      applyAlbums(next);
-    }
+    const primary = { ...listMap(list) };
+    if (prev) primary[id] = prev;
+    else delete primary[id];
+    setListMap(list, primary);
+    const restoredOther = { ...listMap(other) };
+    if (prevOther) restoredOther[id] = prevOther;
+    else delete restoredOther[id];
+    setListMap(other, restoredOther);
+    emitAlbums();
     throw e;
   }
+}
+
+export async function hideAlbum(entry: AlbumEntry): Promise<void> {
+  await upsertAlbumExclusive("hidden", entry);
+}
+
+export async function excludeAlbum(entry: AlbumEntry): Promise<void> {
+  await upsertAlbumExclusive("excluded", entry);
 }
 
 export async function unhideAlbum(albumId: string): Promise<void> {
-  const docId = findDocIdForAlbumId(albumId);
+  const docId = findDocIdForAlbumId("hidden", albumId);
   if (!docId) return;
-  await removeByDocId(docId);
+  await removeByDocId("hidden", docId);
 }
 
-export async function removeByDocId(docId: string): Promise<void> {
+export async function includeAlbum(albumId: string): Promise<void> {
+  const docId = findDocIdForAlbumId("excluded", albumId);
+  if (!docId) return;
+  await removeByDocId("excluded", docId);
+}
+
+export async function removeByDocId(
+  list: AlbumListKind,
+  docId: string,
+): Promise<void> {
   const userId = requireUid();
-  const prev = albums[docId];
+  const prev = listMap(list)[docId];
   if (!prev) return;
-  const next = { ...albums };
+  const next = { ...listMap(list) };
   delete next[docId];
-  applyAlbums(next);
+  applyList(list, next);
   try {
-    await removeAlbum(userId, docId);
+    await removeAlbum(userId, list, docId);
   } catch (e) {
-    applyAlbums({ ...albums, [docId]: prev });
+    applyList(list, { ...listMap(list), [docId]: prev });
     throw e;
   }
 }
 
-export async function clearAllHiddenAlbums(): Promise<number> {
+export async function clearAlbumList(list: AlbumListKind): Promise<number> {
   const userId = requireUid();
-  const prevAlbums = albums;
-  const ids = Object.keys(prevAlbums);
+  const prev = listMap(list);
+  const ids = Object.keys(prev);
   const count = ids.length;
   if (count === 0) return 0;
-  applyAlbums({});
+  applyList(list, {});
   try {
-    await clearAllAlbums(userId, ids);
+    await clearAllAlbums(userId, list, ids);
   } catch (e) {
-    applyAlbums(prevAlbums);
+    applyList(list, prev);
     throw e;
   }
   return count;
 }
 
-export async function setHideAlbumTiles(value: boolean): Promise<void> {
-  hideTilesEnabled = value;
-  writeLocalHideTiles(value);
-  emitHideTiles();
+export async function setGridFilter(
+  list: AlbumListKind,
+  value: boolean,
+): Promise<void> {
+  gridFilters = { ...gridFilters, [list]: value };
+  writeLocalGridFilter(list, value);
+  emitGridFilters();
 }
 
 export async function signIn(
@@ -238,7 +363,7 @@ export async function signOut(): Promise<void> {
   await signOutCurrent();
 }
 
-export type HiddenAlbumEntry = {
+export type AlbumListEntry = {
   docId: string;
   albumId: string | null;
   title: string;
@@ -246,12 +371,12 @@ export type HiddenAlbumEntry = {
   updatedAt: number;
 };
 
-export function listHiddenAlbumEntries(): HiddenAlbumEntry[] {
-  const rows: HiddenAlbumEntry[] = [];
-  for (const [docId, album] of Object.entries(albums)) {
+export function listAlbumEntries(list: AlbumListKind): AlbumListEntry[] {
+  const rows: AlbumListEntry[] = [];
+  for (const [docId, album] of Object.entries(listMap(list))) {
     rows.push({
       docId,
-      albumId: albumIdFromSavedAlbum(album),
+      albumId: albumIdFromEntry(album),
       title: (album.title ?? "").trim() || "Untitled album",
       url: album.url ?? null,
       updatedAt: album.updatedAt,
@@ -264,31 +389,20 @@ export function listHiddenAlbumEntries(): HiddenAlbumEntry[] {
 export async function startAlbumSync(): Promise<() => void> {
   if (started) return () => undefined;
   started = true;
-  hideTilesEnabled = readLocalHideTiles();
+  gridFilters = readLocalGridFilters();
   firestoreDb();
   await firebaseAuthReady();
+  applyAuthUser(firebaseAuth().currentUser);
   unsubAuth = watchAuth((user) => {
-    void (async () => {
-      const view = userView(user);
-      const nextUid = view?.uid ?? null;
-      if (!view) {
-        syncEpoch += 1;
-        detachAlbumListeners();
-        uid = null;
-        applyAlbums({});
-        emitAuth(null);
-        return;
-      }
-      uid = nextUid;
-      await attachAlbumListeners(view.uid);
-      emitAuth(view);
-    })();
+    applyAuthUser(user);
   });
   return () => {
     syncEpoch += 1;
     unsubAuth?.();
     unsubAuth = null;
     detachAlbumListeners();
+    authUiReady = false;
+    authUser = null;
     started = false;
   };
 }

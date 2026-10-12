@@ -1,10 +1,10 @@
-import type { HiddenAlbumEntry } from "@/albums/store";
+import type { AlbumListEntry } from "@/albums/store";
 
 function normalizeAlbumSearchQuery(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
-function haystack(entry: HiddenAlbumEntry): string {
+function haystack(entry: AlbumListEntry): string {
   const parts = [
     entry.title,
     entry.albumId ?? "",
@@ -15,7 +15,7 @@ function haystack(entry: HiddenAlbumEntry): string {
 }
 
 function matchesAlbumSearch(
-  entry: HiddenAlbumEntry,
+  entry: AlbumListEntry,
   rawQuery: string,
 ): boolean {
   const query = normalizeAlbumSearchQuery(rawQuery);
@@ -34,10 +34,10 @@ function matchesAlbumSearch(
   return false;
 }
 
-export function filterHiddenAlbumEntries(
-  entries: HiddenAlbumEntry[],
+export function filterAlbumListEntries(
+  entries: AlbumListEntry[],
   rawQuery: string,
-): HiddenAlbumEntry[] {
+): AlbumListEntry[] {
   const query = normalizeAlbumSearchQuery(rawQuery);
   if (!query) return entries;
   return entries.filter((entry) => matchesAlbumSearch(entry, query));

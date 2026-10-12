@@ -1,8 +1,10 @@
+import { toneCss } from "@/features/album-hide-toggle/button-colors";
+
 const FONT =
   'system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
 
 const SPOTIFY_ACTION_BAR_ITEM_GAP_PX = 22;
-const HIDE_BUTTON_HEIGHT_PX = 36;
+const BUTTON_HEIGHT_PX = 36;
 
 export const hideButtonShadowCss = `
 :host {
@@ -13,10 +15,9 @@ export const hideButtonShadowCss = `
   flex-shrink: 0;
   flex-grow: 0;
   width: auto;
-  min-width: 96px;
-  height: ${HIDE_BUTTON_HEIGHT_PX}px;
-  min-height: ${HIDE_BUTTON_HEIGHT_PX}px;
-  max-height: ${HIDE_BUTTON_HEIGHT_PX}px;
+  height: ${BUTTON_HEIGHT_PX}px;
+  min-height: ${BUTTON_HEIGHT_PX}px;
+  max-height: ${BUTTON_HEIGHT_PX}px;
   margin: 0;
   margin-inline-start: 0;
   margin-inline-end: ${SPOTIFY_ACTION_BAR_ITEM_GAP_PX}px;
@@ -32,6 +33,7 @@ export const hideButtonShadowCss = `
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -44,11 +46,11 @@ export const hideButtonShadowCss = `
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
-  min-width: 0;
-  height: ${HIDE_BUTTON_HEIGHT_PX}px;
-  min-height: ${HIDE_BUTTON_HEIGHT_PX}px;
-  max-height: ${HIDE_BUTTON_HEIGHT_PX}px;
+  width: auto;
+  min-width: 96px;
+  height: ${BUTTON_HEIGHT_PX}px;
+  min-height: ${BUTTON_HEIGHT_PX}px;
+  max-height: ${BUTTON_HEIGHT_PX}px;
   padding: 0 14px;
   border-radius: 9999px;
   font-size: 13px;
@@ -93,28 +95,13 @@ export const hideButtonShadowCss = `
   pointer-events: none;
 }
 
-.ext-btn--hide {
-  background: hsla(0, 0%, 100%, 0.1);
-  border-color: hsla(0, 0%, 100%, 0.22);
-  color: #fff;
-}
+${toneCss("hide")}
 
-.ext-btn--hide:hover:not(:disabled) {
-  background: hsla(0, 0%, 100%, 0.16);
-  border-color: hsla(0, 0%, 100%, 0.32);
-}
+${toneCss("unhide")}
 
-.ext-btn--unhide {
-  background: hsla(142, 71%, 45%, 0.22);
-  border-color: hsla(142, 65%, 50%, 0.55);
-  color: #86efac;
-}
+${toneCss("exclude")}
 
-.ext-btn--unhide:hover:not(:disabled) {
-  background: hsla(142, 71%, 45%, 0.32);
-  border-color: hsla(142, 65%, 55%, 0.7);
-  color: #bbf7d0;
-}
+${toneCss("include")}
 
 .ext-btn:focus-visible {
   box-shadow: 0 0 0 2px hsla(0, 0%, 100%, 0.35);
@@ -134,3 +121,5 @@ export const hideButtonShadowCss = `
 export const iconSvgEyeOff = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>`;
 
 export const iconSvgEye = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+export const iconSvgBan = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>`;

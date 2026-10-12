@@ -125,15 +125,27 @@ export const managerPanelCss = `
   gap: 8px;
 }
 
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-stack[hidden] {
+  display: none !important;
+}
+
 .settings {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px 16px;
+  padding: 16px 18px;
 }
 
-.settings[hidden] {
-  display: none !important;
+.settings-stack > .settings + .settings {
+  border-top: 1px solid var(--ha-line);
 }
 
 .settings__copy {
@@ -189,6 +201,45 @@ export const managerPanelCss = `
   gap: 12px;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.library[hidden] {
+  display: none !important;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--ha-line);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.tabs__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ha-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tabs__btn[data-active="true"] {
+  background: rgba(var(--spice-rgb-text, 255, 255, 255), 0.12);
+  color: var(--ha-text);
+}
+
+.tabs__btn:focus-visible {
+  outline: 2px solid rgba(30, 215, 96, 0.45);
+  outline-offset: 1px;
 }
 
 .header {

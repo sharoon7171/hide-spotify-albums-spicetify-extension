@@ -1,4 +1,4 @@
-import { hiddenAlbumIdSet } from "@/albums/store";
+import { filteredAlbumIdSet } from "@/albums/store";
 import { XpuiDom, XpuiRoute } from "@/hiding/re";
 import {
   domHideSelector,
@@ -92,7 +92,7 @@ function scheduleDomPass(): void {
   requestAnimationFrame(() => {
     domScheduled = false;
     if (!usesDomHiding()) return;
-    applyHideAlbumDom(mainDomRoot(), routePathname(), hiddenAlbumIdSet());
+    applyHideAlbumDom(mainDomRoot(), routePathname(), filteredAlbumIdSet());
   });
 }
 

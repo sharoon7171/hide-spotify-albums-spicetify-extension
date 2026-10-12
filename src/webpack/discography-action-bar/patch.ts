@@ -1,24 +1,29 @@
 import {
+  excludeAlbum,
   hideAlbum,
+  includeAlbum,
+  isAlbumExcluded,
   isAlbumHidden,
-  subscribeHiddenAlbums,
+  subscribeAlbumLists,
   unhideAlbum,
 } from "@/albums/store";
-import type { SavedAlbum } from "@/albums/saved-album";
+import type { AlbumEntry } from "@/albums/album-entry";
 import { albumIdFromHref, albumUrlFromAlbumId } from "@/albums/urls";
 import { isDiscographyPath } from "@/hiding/discography";
 import { routePathname } from "@/hiding/routes";
+import { albumActionTones } from "@/features/album-hide-toggle/button-colors";
 import {
+  iconSvgBan,
   iconSvgEye,
   iconSvgEyeOff,
 } from "@/features/album-hide-toggle/styles";
 import { findModuleIdByExportBody, getWebpackRequire } from "@/webpack/require";
 
-export const DISCOGRAPHY_ACTION_BAR_CLASS = "dbOUwNSA_yoVuTIx2hMf";
+const DISCOGRAPHY_ACTION_BAR_CLASS = "dbOUwNSA_yoVuTIx2hMf";
 
 const JSX_RUNTIME_NEEDLE = "t.Fragment=a,t.jsx=c,t.jsxs=c";
-const HIDE_KEY = "spicetify-ext-disc-hide";
-const HIDE_PROP = "data-spicetify-ext-disc-hide";
+const CONTROLS_KEY = "spicetify-ext-disc-controls";
+const CONTROL_PROP = "data-spicetify-ext-disc-control";
 
 type JsxFn = (type: unknown, props: unknown, key?: unknown) => unknown;
 
@@ -46,43 +51,50 @@ type PatchTarget = {
 const patched = new WeakSet<object>();
 const JSX_CACHE_KEY = "jsx-runtime-Fragment-jsx-jsxs";
 
-export function installDiscographyActionBarJsxPatch(
+export function tryInstallDiscographyActionBarJsxPatch(
   sp: typeof Spicetify,
-): () => void {
+): (() => void) | null {
   const react = sp.React as ReactLike | undefined;
   if (
     typeof react?.createElement !== "function" ||
     typeof react.useSyncExternalStore !== "function" ||
     typeof react.useRef !== "function"
   ) {
-    return () => undefined;
+    return null;
   }
 
   const req = getWebpackRequire();
-  if (!req) return () => undefined;
+  if (!req) return null;
 
   const jsxId = findModuleIdByExportBody(
     (source) => source.includes(JSX_RUNTIME_NEEDLE),
     JSX_CACHE_KEY,
   );
-  if (!jsxId) return () => undefined;
+  if (!jsxId) return null;
 
   const mod = req(jsxId) as PatchTarget;
   if (typeof mod.jsx !== "function" || typeof mod.jsxs !== "function") {
-    return () => undefined;
+    return null;
   }
+  if (patched.has(mod as object)) return () => undefined;
 
-  const HideButton = createHideButtonComponent(sp, react);
+  const HideButton = createListButtonComponent(sp, react, "hidden");
+  const ExcludeButton = createListButtonComponent(sp, react, "excluded");
   const wrap = (original: JsxFn): JsxFn => {
     const wrapped: JsxFn = (type, props, key) => {
-      const nextProps = maybeInjectHide(react, HideButton, type, props);
+      const nextProps = maybeInjectControls(
+        react,
+        HideButton,
+        ExcludeButton,
+        type,
+        props,
+      );
       return original(type, nextProps, key);
     };
     return wrapped;
   };
 
-  const restore = patchJsxFns(mod, wrap);
-  return restore;
+  return patchJsxFns(mod, wrap);
 }
 
 function patchJsxFns(
@@ -102,9 +114,10 @@ function patchJsxFns(
   };
 }
 
-function maybeInjectHide(
+function maybeInjectControls(
   react: ReactLike,
   HideButton: unknown,
+  ExcludeButton: unknown,
   type: unknown,
   props: unknown,
 ): unknown {
@@ -118,33 +131,45 @@ function maybeInjectHide(
   }
   const albumId = albumIdFromActionBarChildren(rec.children);
   if (!albumId) return props;
-  if (childrenHaveHide(rec.children, albumId)) return props;
+  if (childrenHaveControl(rec.children, albumId)) return props;
   const title = titleFromActionBarChildren(rec.children) || "Untitled album";
   const hideEl = react.createElement(HideButton, {
-    key: HIDE_KEY,
-    [HIDE_PROP]: albumId,
+    key: `${CONTROLS_KEY}-hide`,
+    [CONTROL_PROP]: albumId,
+    albumId,
+    title,
+  });
+  const excludeEl = react.createElement(ExcludeButton, {
+    key: `${CONTROLS_KEY}-exclude`,
+    [CONTROL_PROP]: albumId,
     albumId,
     title,
   });
   const children = Array.isArray(rec.children)
-    ? [...rec.children, hideEl]
+    ? [...rec.children, hideEl, excludeEl]
     : rec.children != null
-      ? [rec.children, hideEl]
-      : [hideEl];
+      ? [rec.children, hideEl, excludeEl]
+      : [hideEl, excludeEl];
   return { ...rec, children };
 }
 
-function createHideButtonComponent(sp: typeof Spicetify, react: ReactLike) {
-  return function DiscographyHideButton(props: {
+function createListButtonComponent(
+  sp: typeof Spicetify,
+  react: ReactLike,
+  list: "hidden" | "excluded",
+) {
+  return function DiscographyListButton(props: {
     albumId: string;
     title: string;
   }) {
     const { albumId, title } = props;
     const busyRef = react.useRef(false);
-    const hidden = react.useSyncExternalStore(
-      (onChange) => subscribeHiddenAlbums(() => onChange()),
-      () => isAlbumHidden(albumId),
-      () => isAlbumHidden(albumId),
+    const active = react.useSyncExternalStore(
+      (onChange) => subscribeAlbumLists(() => onChange()),
+      () =>
+        list === "hidden" ? isAlbumHidden(albumId) : isAlbumExcluded(albumId),
+      () =>
+        list === "hidden" ? isAlbumHidden(albumId) : isAlbumExcluded(albumId),
     );
 
     const onClick = (event: Event) => {
@@ -154,17 +179,30 @@ function createHideButtonComponent(sp: typeof Spicetify, react: ReactLike) {
       busyRef.current = true;
       void (async () => {
         try {
-          if (isAlbumHidden(albumId)) {
-            await unhideAlbum(albumId);
-            sp.showNotification("Album unhidden");
+          if (list === "hidden") {
+            if (isAlbumHidden(albumId)) {
+              await unhideAlbum(albumId);
+              sp.showNotification("Album unhidden");
+            } else {
+              const entry: AlbumEntry = {
+                updatedAt: Date.now(),
+                url: albumUrlFromAlbumId(albumId),
+                title,
+              };
+              await hideAlbum(entry);
+              sp.showNotification("Album hidden");
+            }
+          } else if (isAlbumExcluded(albumId)) {
+            await includeAlbum(albumId);
+            sp.showNotification("Album included");
           } else {
-            const entry: SavedAlbum = {
+            const entry: AlbumEntry = {
               updatedAt: Date.now(),
               url: albumUrlFromAlbumId(albumId),
               title,
             };
-            await hideAlbum(entry);
-            sp.showNotification("Album hidden");
+            await excludeAlbum(entry);
+            sp.showNotification("Album excluded");
           }
         } catch (e) {
           const code =
@@ -183,12 +221,43 @@ function createHideButtonComponent(sp: typeof Spicetify, react: ReactLike) {
       })();
     };
 
+    const label =
+      list === "hidden"
+        ? active
+          ? "Unhide"
+          : "Hide"
+        : active
+          ? "Include"
+          : "Exclude";
+    const aria =
+      list === "hidden"
+        ? active
+          ? "Unhide this album"
+          : "Hide this album"
+        : active
+          ? "Include this album"
+          : "Exclude this album";
+    const iconHtml =
+      list === "hidden"
+        ? active
+          ? iconSvgEye
+          : iconSvgEyeOff
+        : iconSvgBan;
+    const tone =
+      list === "hidden"
+        ? active
+          ? albumActionTones.unhide
+          : albumActionTones.hide
+        : active
+          ? albumActionTones.include
+          : albumActionTones.exclude;
+
     return react.createElement(
       "button",
       {
         type: "button",
-        [HIDE_PROP]: albumId,
-        "aria-label": hidden ? "Unhide this album" : "Hide this album",
+        [CONTROL_PROP]: albumId,
+        "aria-label": aria,
         onClick,
         style: {
           boxSizing: "border-box",
@@ -199,6 +268,7 @@ function createHideButtonComponent(sp: typeof Spicetify, react: ReactLike) {
           height: "36px",
           minHeight: "36px",
           maxHeight: "36px",
+          marginInlineStart: "8px",
           padding: "0 14px",
           borderRadius: "9999px",
           fontSize: "13px",
@@ -207,22 +277,18 @@ function createHideButtonComponent(sp: typeof Spicetify, react: ReactLike) {
           lineHeight: 1,
           whiteSpace: "nowrap",
           cursor: "pointer",
-          border: "1px solid hsla(0, 0%, 100%, 0.22)",
-          background: hidden
-            ? "hsla(142, 71%, 45%, 0.22)"
-            : "hsla(0, 0%, 100%, 0.1)",
-          color: hidden ? "#86efac" : "#fff",
+          border: `1px solid ${tone.border}`,
+          background: tone.background,
+          color: tone.color,
           fontFamily:
             'system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
         },
       },
       react.createElement("span", {
         style: { display: "inline-flex", width: 16, height: 16 },
-        dangerouslySetInnerHTML: {
-          __html: hidden ? iconSvgEye : iconSvgEyeOff,
-        },
+        dangerouslySetInnerHTML: { __html: iconHtml },
       }),
-      react.createElement("span", null, hidden ? "Unhide" : "Hide"),
+      react.createElement("span", null, label),
     );
   };
 }
@@ -252,10 +318,10 @@ function titleFromActionBarChildren(children: unknown): string | null {
   return found;
 }
 
-function childrenHaveHide(children: unknown, albumId: string): boolean {
+function childrenHaveControl(children: unknown, albumId: string): boolean {
   let found = false;
   visitElements(children, (props) => {
-    if (props[HIDE_PROP] === albumId) found = true;
+    if (props[CONTROL_PROP] === albumId) found = true;
   });
   return found;
 }

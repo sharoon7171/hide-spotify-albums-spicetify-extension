@@ -1,4 +1,4 @@
-import { readHiddenAlbumIdsEarly } from "@/albums/early-ids";
+import { readFilteredAlbumIdsEarly } from "@/albums/early-ids";
 import { createAlbumTrackTitleHidePatch } from "@/webpack/album-track-title-hide/patch";
 import {
   cacheWebpackRequire,
@@ -10,7 +10,7 @@ import { createVirtualListPatch } from "@/webpack/virtual-list/patch";
 (function () {
   const ALBUM_URI = /^spotify:album:([0-9A-Za-z]+)$/;
   const virtualListPatch = createVirtualListPatch({
-    hiddenIds: readHiddenAlbumIdsEarly,
+    hiddenIds: readFilteredAlbumIdsEarly,
     albumUriRe: ALBUM_URI,
   });
   const titleHidePatch = createAlbumTrackTitleHidePatch();
