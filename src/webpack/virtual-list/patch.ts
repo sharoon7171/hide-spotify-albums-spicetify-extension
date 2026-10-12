@@ -3,7 +3,7 @@ import { routePathname } from "@/hiding/routes";
 import { VIRTUAL_LIST_NEEDLE } from "@/hiding/virtual-list";
 import type { WebpackRequire } from "@/webpack/require";
 
-export const VIRTUAL_LIST_NEEDLE_PATTERN = VIRTUAL_LIST_NEEDLE;
+const VIRTUAL_LIST_NEEDLE_PATTERN = VIRTUAL_LIST_NEEDLE;
 
 const scannedFactories = new WeakSet<object>();
 
